@@ -34,10 +34,10 @@ fn main() {
                 distance_tracker,
                 speed_limit_system,
                 out_of_bounds_system,
+                despawner.after(distance_tracker),
             )
                 .chain(),
         )
-        .add_systems(FixedUpdate, projectile_despawner)
         .add_systems(FixedUpdate, apply_rotational_velocity)
         .run();
 }
@@ -77,6 +77,9 @@ struct PlayerBundle {
     heading: Heading,
     sprite_bundle: SpriteBundle,
 }
+
+#[derive(Component)]
+struct Despawning;
 
 impl PlayerBundle {
     fn new() -> PlayerBundle {
@@ -371,16 +374,22 @@ fn projectile_spawner(mut commands: Commands, mut ev_fire: EventReader<Projectil
     }
 }
 
-fn distance_tracker(mut query: Query<(&mut TravelDistance, &Velocity)>, time: Res<Time>) {
-    for (mut travel_distance, velocity) in query.iter_mut() {
-        travel_distance.current += velocity.0.length() * time.delta_seconds()
+fn distance_tracker(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut TravelDistance, &Velocity)>,
+    time: Res<Time>,
+) {
+    for (entity, mut travel_distance, velocity) in query.iter_mut() {
+        travel_distance.current += velocity.0.length() * time.delta_seconds();
+
+        if travel_distance.current > travel_distance.max {
+            commands.entity(entity).insert(Despawning);
+        }
     }
 }
 
-fn projectile_despawner(mut commands: Commands, mut query: Query<(Entity, &mut TravelDistance)>) {
-    for (entity, travel_distance) in query.iter_mut() {
-        if travel_distance.current > travel_distance.max {
-            commands.entity(entity).despawn();
-        }
+fn despawner(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
     }
 }
