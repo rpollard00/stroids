@@ -23,8 +23,9 @@ fn main() {
             ..default()
         }))
         .add_plugins(EntropyPlugin::<WyRand>::default())
+        .add_event::<ProjectileFiredEvent>()
         .add_systems(Startup, (setup, setup_asteroids).chain())
-        .add_systems(Update, player_controls)
+        .add_systems(Update, (player_controls, projectile_spawner).chain())
         .add_systems(
             FixedUpdate,
             (apply_movement, speed_limit_system, out_of_bounds_system).chain(),
@@ -36,6 +37,7 @@ fn main() {
 const BACKGROUND_COLOR: Color = Color::BLACK;
 const SHIP_COLOR: Color = Color::srgb(0.9, 0.0, 0.0);
 const ASTEROID_COLOR: Color = Color::WHITE;
+const PROJECTILE_COLOR: Color = Color::WHITE;
 
 const SCREEN_CROSS_TIME: f32 = 1.5; // time in seconds to cross screen
 const ACCELERATION_TIME: f32 = 1.0; // time to reach max acceleration
@@ -51,13 +53,13 @@ const ROTATION_SPEED: f32 = TAU / ROTATION_TIME;
 #[derive(Component)]
 struct Player;
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct Velocity(Vec2);
 
 #[derive(Component)]
 struct RotationalVelocity(f32);
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 struct Heading(f32);
 
 #[derive(Bundle)]
@@ -81,6 +83,49 @@ impl PlayerBundle {
                 },
                 transform: Transform {
                     scale: SHIP_SIZE.extend(1.0),
+                    ..default()
+                },
+                ..default()
+            },
+        }
+    }
+}
+
+#[derive(Component)]
+struct Projectile;
+
+#[derive(Bundle)]
+struct ProjectileBundle {
+    projectile: Projectile,
+    heading: Heading,
+    start_velocity: Velocity,
+    sprite_bundle: SpriteBundle,
+}
+
+#[derive(Event)]
+struct ProjectileFiredEvent(Heading, Velocity, Vec2);
+
+const PROJECTILE_BASE_VELOCITY: f32 = MAX_SPEED;
+impl ProjectileBundle {
+    fn new(heading: f32, start_velocity: Vec2, start: Vec2) -> ProjectileBundle {
+        // we need the angle as a unit vector
+
+        let heading_vec = Vec2::new(heading.cos(), heading.sin());
+        let velo = heading_vec * PROJECTILE_BASE_VELOCITY;
+        ProjectileBundle {
+            projectile: Projectile,
+            heading: Heading(heading),
+            // ultimately heading doesn't really matter here, what we need is a velocity vector in
+            // the right direction based on the ship's heading
+            start_velocity: Velocity(velo),
+            sprite_bundle: SpriteBundle {
+                sprite: Sprite {
+                    color: PROJECTILE_COLOR,
+                    ..default()
+                },
+                transform: Transform {
+                    translation: start.extend(1.0),
+                    scale: Vec3::new(4., 4., 1.),
                     ..default()
                 },
                 ..default()
@@ -165,6 +210,7 @@ const NUM_ASTEROIDS: i32 = 8;
 const MAX_ASTEROID_SPEED: f32 = MAX_SPEED / 8.;
 const MAX_ASTEROID_ROTATION_SPEED: f32 = TAU * 0.5;
 const SAFE_RADIUS: f32 = 200.;
+
 fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyRand>>) {
     for _ in 0..NUM_ASTEROIDS {
         // Random direction in radians
@@ -210,11 +256,12 @@ fn screen_edge_distance(direction_norm: &Vec2) -> f32 {
 }
 
 fn player_controls(
-    mut query: Query<(&mut Velocity, &mut Heading), With<Player>>,
+    mut query: Query<(&mut Velocity, &mut Heading, &Transform), With<Player>>,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    mut ev_fire: EventWriter<ProjectileFiredEvent>,
 ) {
-    let (mut velocity, mut heading) = query.single_mut();
+    let (mut velocity, mut heading, transform) = query.single_mut();
 
     if keys.pressed(KeyCode::KeyD) {
         heading.0 -= ROTATION_SPEED * time.delta_seconds();
@@ -226,6 +273,20 @@ fn player_controls(
     heading.0 = heading.0 % TAU;
 
     let heading_vec = Vec2::new(heading.0.cos(), heading.0.sin());
+
+    if keys.just_pressed(KeyCode::Space) {
+        let firing_start_pt = transform.scale.x * 0.5 + 5.;
+        let ship_front = Vec2::new(
+            heading_vec.x * firing_start_pt,
+            heading_vec.y * firing_start_pt,
+        );
+        let projectile_location = ship_front + transform.translation.xy();
+        ev_fire.send(ProjectileFiredEvent(
+            Heading(heading.0),
+            Velocity(velocity.0),
+            projectile_location,
+        ));
+    }
 
     if keys.pressed(KeyCode::KeyW) {
         let thrust = heading_vec * THRUST_POWER * time.delta_seconds();
@@ -277,11 +338,18 @@ fn out_of_bounds_system(mut query: Query<&mut Transform>) {
     }
 }
 
-fn speed_limit_system(mut query: Query<&mut Velocity>) {
+fn speed_limit_system(mut query: Query<&mut Velocity, With<Player>>) {
     for mut velo in query.iter_mut() {
         let speed_squared = velo.0.length_squared();
         if speed_squared > MAX_SPEED_SQUARED {
             velo.0 = velo.0.normalize() * MAX_SPEED;
         }
+    }
+}
+
+fn projectile_spawner(mut command: Commands, mut ev_fire: EventReader<ProjectileFiredEvent>) {
+    for ev in ev_fire.read() {
+        let (heading, velocity, location) = (ev.0, ev.1, ev.2);
+        command.spawn(ProjectileBundle::new(heading.0, velocity.0, location));
     }
 }
