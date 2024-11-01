@@ -20,21 +20,27 @@ fn main() {
             ..default()
         }))
         .add_systems(Startup, setup)
+        .add_systems(Update, player_controls)
         .add_systems(
             FixedUpdate,
-            (
-                player_movement,
-                apply_player_movement,
-                speed_limit_system,
-                out_of_bounds_system,
-            )
-                .chain(),
+            (apply_movement, speed_limit_system, out_of_bounds_system).chain(),
         )
         .run();
 }
 
 const BACKGROUND_COLOR: Color = Color::BLACK;
 const SHIP_COLOR: Color = Color::srgb(0.9, 0.0, 0.0);
+
+const SCREEN_CROSS_TIME: f32 = 1.5; // time in seconds to cross screen
+const ACCELERATION_TIME: f32 = 1.0; // time to reach max acceleration
+const ROTATION_TIME: f32 = 0.75; // full rotation time
+
+const SHIP_SIZE: Vec2 = Vec2::new(40., 20.);
+const MAX_SPEED: f32 = WINDOW_WIDTH / SCREEN_CROSS_TIME;
+const MAX_SPEED_SQUARED: f32 = MAX_SPEED * MAX_SPEED;
+
+const THRUST_POWER: f32 = MAX_SPEED / ACCELERATION_TIME;
+const ROTATION_SPEED: f32 = TAU / ROTATION_TIME;
 
 #[derive(Component)]
 struct Player;
@@ -52,8 +58,6 @@ struct PlayerBundle {
     heading: Heading,
     sprite_bundle: SpriteBundle,
 }
-
-const SHIP_SIZE: Vec2 = Vec2::new(40., 20.);
 
 impl PlayerBundle {
     fn new() -> PlayerBundle {
@@ -93,7 +97,7 @@ fn setup(mut commands: Commands) {
     commands.spawn(PlayerBundle::new());
 }
 
-fn player_movement(
+fn player_controls(
     mut query: Query<(&mut Velocity, &mut Heading), With<Player>>,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
@@ -101,10 +105,10 @@ fn player_movement(
     let (mut velocity, mut heading) = query.single_mut();
 
     if keys.pressed(KeyCode::KeyD) {
-        heading.0 -= TAU * time.delta_seconds();
+        heading.0 -= ROTATION_SPEED * time.delta_seconds();
     }
     if keys.pressed(KeyCode::KeyA) {
-        heading.0 += TAU * time.delta_seconds();
+        heading.0 += ROTATION_SPEED * time.delta_seconds();
     }
 
     heading.0 = heading.0 % TAU;
@@ -112,15 +116,12 @@ fn player_movement(
     let heading_vec = Vec2::new(heading.0.cos(), heading.0.sin());
 
     if keys.pressed(KeyCode::KeyW) {
-        let thrust = heading_vec * 10.0;
+        let thrust = heading_vec * THRUST_POWER * time.delta_seconds();
         velocity.0 += thrust;
     }
 }
 
-fn apply_player_movement(
-    mut query: Query<(&mut Transform, &Heading, &Velocity), With<Player>>,
-    time: Res<Time>,
-) {
+fn apply_movement(mut query: Query<(&mut Transform, &Heading, &Velocity)>, time: Res<Time>) {
     let (mut transform, heading, velocity) = query.single_mut();
 
     transform.rotation = Quat::from_rotation_z(heading.0);
@@ -146,13 +147,11 @@ fn out_of_bounds_system(mut query: Query<&mut Transform>) {
     }
 }
 
-const SPEED_LIMIT: f32 = 750.;
-const SPEED_LIMIT_SQUARED: f32 = SPEED_LIMIT * SPEED_LIMIT;
 fn speed_limit_system(mut query: Query<&mut Velocity>) {
     for mut velo in query.iter_mut() {
         let speed_squared = velo.0.length_squared();
-        if speed_squared > SPEED_LIMIT_SQUARED {
-            velo.0 = velo.0.normalize() * SPEED_LIMIT;
+        if speed_squared > MAX_SPEED_SQUARED {
+            velo.0 = velo.0.normalize() * MAX_SPEED;
         }
     }
 }
