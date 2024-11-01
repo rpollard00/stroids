@@ -108,10 +108,8 @@ struct ProjectileFiredEvent(Heading, Velocity, Vec2);
 const PROJECTILE_BASE_VELOCITY: f32 = MAX_SPEED;
 impl ProjectileBundle {
     fn new(heading: f32, start_velocity: Vec2, start: Vec2) -> ProjectileBundle {
-        // we need the angle as a unit vector
-
         let heading_vec = Vec2::new(heading.cos(), heading.sin());
-        let velo = heading_vec * PROJECTILE_BASE_VELOCITY;
+        let velo = start_velocity + heading_vec * PROJECTILE_BASE_VELOCITY;
         ProjectileBundle {
             projectile: Projectile,
             heading: Heading(heading),
