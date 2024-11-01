@@ -277,6 +277,7 @@ fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyRand>
 fn asteroid_destroyed_listener(
     mut commands: Commands,
     mut asteroid_ev: EventReader<AsteroidDestroyedEvent>,
+    mut rng: ResMut<GlobalEntropy<WyRand>>,
 ) {
     for ev in asteroid_ev.read() {
         let (entity, transform, velocity, size) = (ev.0, ev.1, ev.2, ev.3);
@@ -291,14 +292,14 @@ fn asteroid_destroyed_listener(
                     AsteroidSize::Small,
                     transform.translation.truncate(),
                     Vec2::new(velocity.0.y, velocity.0.x),
-                    0.0,
+                    (rng.next_u32() as f32) % TAU,
                     0.0,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Small,
                     transform.translation.truncate(),
                     Vec2::new(-velocity.0.y, -velocity.0.x),
-                    0.0,
+                    (rng.next_u32() as f32) % TAU,
                     0.0,
                 ));
             }
@@ -308,14 +309,14 @@ fn asteroid_destroyed_listener(
                     AsteroidSize::Medium,
                     transform.translation.truncate(),
                     Vec2::new(velocity.0.y, velocity.0.x),
-                    0.0,
+                    (rng.next_u32() as f32) % TAU,
                     0.0,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Medium,
                     transform.translation.truncate(),
                     Vec2::new(-velocity.0.y, -velocity.0.x),
-                    0.0,
+                    (rng.next_u32() as f32) % TAU,
                     0.0,
                 ));
             }
