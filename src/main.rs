@@ -1,6 +1,9 @@
 use std::f32::consts::TAU;
 
-use bevy::prelude::*;
+use bevy::{
+    math::bounding::{Aabb2d, BoundingVolume, IntersectsVolume},
+    prelude::*,
+};
 use bevy_prng::WyRand;
 use bevy_rand::{plugin::EntropyPlugin, prelude::GlobalEntropy};
 use rand_core::RngCore;
@@ -34,7 +37,8 @@ fn main() {
                 distance_tracker,
                 speed_limit_system,
                 out_of_bounds_system,
-                despawner.after(distance_tracker),
+                collision_system,
+                despawner,
             )
                 .chain(),
         )
@@ -281,36 +285,36 @@ fn player_controls(
     time: Res<Time>,
     mut ev_fire: EventWriter<ProjectileFiredEvent>,
 ) {
-    let (mut velocity, mut heading, transform) = query.single_mut();
+    if let Ok((mut velocity, mut heading, transform)) = query.get_single_mut() {
+        if keys.pressed(KeyCode::KeyD) {
+            heading.0 -= ROTATION_SPEED * time.delta_seconds();
+        }
+        if keys.pressed(KeyCode::KeyA) {
+            heading.0 += ROTATION_SPEED * time.delta_seconds();
+        }
 
-    if keys.pressed(KeyCode::KeyD) {
-        heading.0 -= ROTATION_SPEED * time.delta_seconds();
-    }
-    if keys.pressed(KeyCode::KeyA) {
-        heading.0 += ROTATION_SPEED * time.delta_seconds();
-    }
+        heading.0 = heading.0 % TAU;
 
-    heading.0 = heading.0 % TAU;
+        let heading_vec = Vec2::new(heading.0.cos(), heading.0.sin());
 
-    let heading_vec = Vec2::new(heading.0.cos(), heading.0.sin());
+        if keys.just_pressed(KeyCode::Space) {
+            let firing_start_pt = transform.scale.x * 0.5 + 5.;
+            let ship_front = Vec2::new(
+                heading_vec.x * firing_start_pt,
+                heading_vec.y * firing_start_pt,
+            );
+            let projectile_location = ship_front + transform.translation.xy();
+            ev_fire.send(ProjectileFiredEvent(
+                Heading(heading.0),
+                Velocity(velocity.0),
+                projectile_location,
+            ));
+        }
 
-    if keys.just_pressed(KeyCode::Space) {
-        let firing_start_pt = transform.scale.x * 0.5 + 5.;
-        let ship_front = Vec2::new(
-            heading_vec.x * firing_start_pt,
-            heading_vec.y * firing_start_pt,
-        );
-        let projectile_location = ship_front + transform.translation.xy();
-        ev_fire.send(ProjectileFiredEvent(
-            Heading(heading.0),
-            Velocity(velocity.0),
-            projectile_location,
-        ));
-    }
-
-    if keys.pressed(KeyCode::KeyW) {
-        let thrust = heading_vec * THRUST_POWER * time.delta_seconds();
-        velocity.0 += thrust;
+        if keys.pressed(KeyCode::KeyW) {
+            let thrust = heading_vec * THRUST_POWER * time.delta_seconds();
+            velocity.0 += thrust;
+        }
     }
 }
 
@@ -391,5 +395,63 @@ fn distance_tracker(
 fn despawner(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+struct Collision;
+
+fn collision_system(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Transform), With<Player>>,
+    projectile_query: Query<(Entity, &Transform), With<Projectile>>,
+    asteroid_query: Query<(Entity, &Transform), With<Asteroid>>,
+) {
+    if let Ok((player, player_transform)) = player_query.get_single() {
+        for (asteroid, asteroid_transform) in asteroid_query.iter() {
+            // check for player asteroid collisions
+            let player_collision = check_bb_collision(
+                Aabb2d::new(
+                    player_transform.translation.truncate(),
+                    player_transform.scale.truncate() / 2.,
+                ),
+                Aabb2d::new(
+                    asteroid_transform.translation.truncate(),
+                    asteroid_transform.scale.truncate() / 2.,
+                ),
+            );
+
+            if let Some(_) = player_collision {
+                commands.entity(player).insert(Despawning);
+            }
+
+            for (projectile, projectile_transform) in projectile_query.iter() {
+                let projectile_collision = check_bb_collision(
+                    Aabb2d::new(
+                        projectile_transform.translation.truncate(),
+                        projectile_transform.scale.truncate() / 2.,
+                    ),
+                    Aabb2d::new(
+                        asteroid_transform.translation.truncate(),
+                        asteroid_transform.scale.truncate() / 2.,
+                    ),
+                );
+
+                if let Some(_) = projectile_collision {
+                    commands.entity(projectile).insert(Despawning);
+                    commands.entity(asteroid).insert(Despawning);
+                }
+            }
+        }
+    } else {
+        return;
+    }
+}
+
+fn check_bb_collision(collider: Aabb2d, collidee: Aabb2d) -> Option<Collision> {
+    if !collider.intersects(&collidee) {
+        None
+    } else {
+        Some(Collision)
     }
 }
