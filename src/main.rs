@@ -1,6 +1,9 @@
 use std::f32::consts::TAU;
 
 use bevy::prelude::*;
+use bevy_prng::WyRand;
+use bevy_rand::{plugin::EntropyPlugin, prelude::GlobalEntropy};
+use rand_core::RngCore;
 
 const WINDOW_WIDTH: f32 = 1024.;
 const WINDOW_HEIGHT: f32 = 768.;
@@ -19,12 +22,14 @@ fn main() {
             }),
             ..default()
         }))
-        .add_systems(Startup, setup)
+        .add_plugins(EntropyPlugin::<WyRand>::default())
+        .add_systems(Startup, (setup, setup_asteroids).chain())
         .add_systems(Update, player_controls)
         .add_systems(
             FixedUpdate,
             (apply_movement, speed_limit_system, out_of_bounds_system).chain(),
         )
+        .add_systems(FixedUpdate, apply_rotational_velocity)
         .run();
 }
 
@@ -48,6 +53,9 @@ struct Player;
 
 #[derive(Component)]
 struct Velocity(Vec2);
+
+#[derive(Component)]
+struct RotationalVelocity(f32);
 
 #[derive(Component)]
 struct Heading(f32);
@@ -96,16 +104,24 @@ struct AsteroidBundle {
     asteroid: Asteroid,
     size: AsteroidSize,
     velocity: Velocity,
+    rotational_velocity: RotationalVelocity,
     heading: Heading,
     sprite_bundle: SpriteBundle,
 }
 
 impl AsteroidBundle {
-    fn new(size: AsteroidSize, position: Vec2, velocity: Vec2, heading: f32) -> AsteroidBundle {
+    fn new(
+        size: AsteroidSize,
+        position: Vec2,
+        velocity: Vec2,
+        rotational_velocity: f32,
+        heading: f32,
+    ) -> AsteroidBundle {
         AsteroidBundle {
             asteroid: Asteroid,
             size,
             velocity: Velocity(velocity),
+            rotational_velocity: RotationalVelocity(rotational_velocity),
             heading: Heading(heading),
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
@@ -143,13 +159,54 @@ fn setup(mut commands: Commands) {
         ..default()
     });
     commands.spawn(PlayerBundle::new());
+}
 
-    commands.spawn(AsteroidBundle::new(
-        AsteroidSize::Large,
-        Vec2::new(500., 500.),
-        Vec2::new(10., 10.),
-        f32::to_radians(45.),
-    ));
+const NUM_ASTEROIDS: i32 = 8;
+const MAX_ASTEROID_SPEED: f32 = MAX_SPEED / 8.;
+const MAX_ASTEROID_ROTATION_SPEED: f32 = TAU * 0.5;
+const SAFE_RADIUS: f32 = 200.;
+fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyRand>>) {
+    for _ in 0..NUM_ASTEROIDS {
+        // Random direction in radians
+        let asteroid_direction = (rng.next_u32() as f32) % TAU;
+        // Random direction as a unit vector
+        let asteroid_direction_vec = Vec2::new(asteroid_direction.cos(), asteroid_direction.sin());
+
+        // distance along ray to screen edge
+        let screen_edge_distance = screen_edge_distance(&asteroid_direction_vec);
+
+        // now I have a distance that represents the max length value
+        let random_length =
+            SAFE_RADIUS + ((rng.next_u32() as f32) % (screen_edge_distance - SAFE_RADIUS));
+        let pos = asteroid_direction_vec * random_length;
+
+        let x_velo: f32 =
+            ((rng.next_u32() as f32) % (MAX_ASTEROID_SPEED * 2.)) - MAX_ASTEROID_SPEED;
+        let y_velo: f32 =
+            ((rng.next_u32() as f32) % (MAX_ASTEROID_SPEED * 2.)) - MAX_ASTEROID_SPEED;
+
+        let heading: f32 = (rng.next_u32() as f32) % TAU;
+        let random_rotational_velo: f32 = ((rng.next_u32() as f32) % MAX_ASTEROID_ROTATION_SPEED)
+            - (0.5 * MAX_ASTEROID_ROTATION_SPEED);
+
+        commands.spawn(AsteroidBundle::new(
+            AsteroidSize::Large,
+            pos,
+            Vec2::new(x_velo, y_velo),
+            random_rotational_velo,
+            heading,
+        ));
+    }
+}
+
+fn screen_edge_distance(direction_norm: &Vec2) -> f32 {
+    assert!(direction_norm.is_normalized());
+    let abs_dir = direction_norm.abs();
+
+    let x_edge_dist = MAX_X_POSITION / abs_dir.x;
+    let y_edge_dist = MAX_Y_POSITION / abs_dir.y;
+
+    x_edge_dist.min(y_edge_dist)
 }
 
 fn player_controls(
@@ -183,21 +240,39 @@ fn apply_movement(mut query: Query<(&mut Transform, &Heading, &Velocity)>, time:
     }
 }
 
+fn apply_rotational_velocity(
+    mut query: Query<(&mut Heading, &RotationalVelocity)>,
+    time: Res<Time>,
+) {
+    for (mut heading, rotational_velocity) in query.iter_mut() {
+        heading.0 += rotational_velocity.0 * time.delta_seconds();
+        heading.0 = heading.0 % TAU;
+    }
+}
+
 fn out_of_bounds_system(mut query: Query<&mut Transform>) {
+    // we want to let things go out of bounds before moving them to prevent popping off the screen
     for mut transform in query.iter_mut() {
-        if transform.translation.x < MIN_X_POSITION {
-            transform.translation.x = MAX_X_POSITION;
+        let out_of_bound_offset = transform.scale.x.max(transform.scale.y);
+
+        let min_x_position = MIN_X_POSITION - out_of_bound_offset;
+        let max_x_position = MAX_X_POSITION + out_of_bound_offset;
+        let min_y_position = MIN_Y_POSITION - out_of_bound_offset;
+        let max_y_position = MAX_Y_POSITION + out_of_bound_offset;
+
+        if transform.translation.x < min_x_position {
+            transform.translation.x = max_x_position;
         }
 
-        if transform.translation.x > MAX_X_POSITION {
-            transform.translation.x = MIN_X_POSITION;
+        if transform.translation.x > max_x_position {
+            transform.translation.x = min_x_position;
         }
 
-        if transform.translation.y < MIN_Y_POSITION {
-            transform.translation.y = MAX_Y_POSITION;
+        if transform.translation.y < min_y_position {
+            transform.translation.y = max_y_position;
         }
-        if transform.translation.y > MAX_Y_POSITION {
-            transform.translation.y = MIN_Y_POSITION;
+        if transform.translation.y > max_y_position {
+            transform.translation.y = min_y_position;
         }
     }
 }
