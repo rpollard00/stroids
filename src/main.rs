@@ -30,6 +30,7 @@ fn main() {
 
 const BACKGROUND_COLOR: Color = Color::BLACK;
 const SHIP_COLOR: Color = Color::srgb(0.9, 0.0, 0.0);
+const ASTEROID_COLOR: Color = Color::WHITE;
 
 const SCREEN_CROSS_TIME: f32 = 1.5; // time in seconds to cross screen
 const ACCELERATION_TIME: f32 = 1.0; // time to reach max acceleration
@@ -80,6 +81,53 @@ impl PlayerBundle {
     }
 }
 
+#[derive(Component, Clone, Copy)]
+enum AsteroidSize {
+    Small,
+    Medium,
+    Large,
+}
+
+#[derive(Component)]
+struct Asteroid;
+
+#[derive(Bundle)]
+struct AsteroidBundle {
+    asteroid: Asteroid,
+    size: AsteroidSize,
+    velocity: Velocity,
+    heading: Heading,
+    sprite_bundle: SpriteBundle,
+}
+
+impl AsteroidBundle {
+    fn new(size: AsteroidSize, position: Vec2, velocity: Vec2, heading: f32) -> AsteroidBundle {
+        AsteroidBundle {
+            asteroid: Asteroid,
+            size,
+            velocity: Velocity(velocity),
+            heading: Heading(heading),
+            sprite_bundle: SpriteBundle {
+                sprite: Sprite {
+                    color: ASTEROID_COLOR,
+                    ..default()
+                },
+                transform: Transform {
+                    translation: position.extend(1.0),
+                    rotation: Quat::from_rotation_z(heading),
+                    scale: match size {
+                        AsteroidSize::Small => Vec3::new(20., 20., 1.),
+                        AsteroidSize::Medium => Vec3::new(60., 60., 1.),
+                        AsteroidSize::Large => Vec3::new(100., 100., 1.),
+                    },
+                    ..default()
+                },
+                ..default()
+            },
+        }
+    }
+}
+
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
@@ -95,6 +143,13 @@ fn setup(mut commands: Commands) {
         ..default()
     });
     commands.spawn(PlayerBundle::new());
+
+    commands.spawn(AsteroidBundle::new(
+        AsteroidSize::Large,
+        Vec2::new(500., 500.),
+        Vec2::new(10., 10.),
+        f32::to_radians(45.),
+    ));
 }
 
 fn player_controls(
@@ -122,10 +177,10 @@ fn player_controls(
 }
 
 fn apply_movement(mut query: Query<(&mut Transform, &Heading, &Velocity)>, time: Res<Time>) {
-    let (mut transform, heading, velocity) = query.single_mut();
-
-    transform.rotation = Quat::from_rotation_z(heading.0);
-    transform.translation += velocity.0.extend(0.0) * time.delta_seconds();
+    for (mut transform, heading, velocity) in query.iter_mut() {
+        transform.rotation = Quat::from_rotation_z(heading.0);
+        transform.translation += velocity.0.extend(0.0) * time.delta_seconds();
+    }
 }
 
 fn out_of_bounds_system(mut query: Query<&mut Transform>) {
