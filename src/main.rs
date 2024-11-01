@@ -28,6 +28,7 @@ fn main() {
         }))
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_event::<ProjectileFiredEvent>()
+        .add_event::<AsteroidDestroyedEvent>()
         .add_systems(Startup, (setup, setup_asteroids).chain())
         .add_systems(Update, (player_controls, projectile_spawner).chain())
         .add_systems(
@@ -38,6 +39,7 @@ fn main() {
                 speed_limit_system,
                 out_of_bounds_system,
                 collision_system,
+                asteroid_destroyed_listener,
                 despawner,
             )
                 .chain(),
@@ -158,7 +160,10 @@ impl ProjectileBundle {
     }
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Event)]
+struct AsteroidDestroyedEvent(Entity, Transform, Velocity, AsteroidSize);
+
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
 enum AsteroidSize {
     Small,
     Medium,
@@ -266,6 +271,55 @@ fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyRand>
             random_rotational_velo,
             heading,
         ));
+    }
+}
+
+fn asteroid_destroyed_listener(
+    mut commands: Commands,
+    mut asteroid_ev: EventReader<AsteroidDestroyedEvent>,
+) {
+    for ev in asteroid_ev.read() {
+        let (entity, transform, velocity, size) = (ev.0, ev.1, ev.2, ev.3);
+
+        _ = match size {
+            AsteroidSize::Small => {
+                commands.entity(entity).insert(Despawning);
+            }
+            AsteroidSize::Medium => {
+                commands.entity(entity).insert(Despawning);
+                commands.spawn(AsteroidBundle::new(
+                    AsteroidSize::Small,
+                    transform.translation.truncate(),
+                    Vec2::new(velocity.0.y, velocity.0.x),
+                    0.0,
+                    0.0,
+                ));
+                commands.spawn(AsteroidBundle::new(
+                    AsteroidSize::Small,
+                    transform.translation.truncate(),
+                    Vec2::new(-velocity.0.y, -velocity.0.x),
+                    0.0,
+                    0.0,
+                ));
+            }
+            AsteroidSize::Large => {
+                commands.entity(entity).insert(Despawning);
+                commands.spawn(AsteroidBundle::new(
+                    AsteroidSize::Medium,
+                    transform.translation.truncate(),
+                    Vec2::new(velocity.0.y, velocity.0.x),
+                    0.0,
+                    0.0,
+                ));
+                commands.spawn(AsteroidBundle::new(
+                    AsteroidSize::Medium,
+                    transform.translation.truncate(),
+                    Vec2::new(-velocity.0.y, -velocity.0.x),
+                    0.0,
+                    0.0,
+                ));
+            }
+        }
     }
 }
 
@@ -405,10 +459,13 @@ fn collision_system(
     mut commands: Commands,
     player_query: Query<(Entity, &Transform), With<Player>>,
     projectile_query: Query<(Entity, &Transform), With<Projectile>>,
-    asteroid_query: Query<(Entity, &Transform), With<Asteroid>>,
+    asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize), With<Asteroid>>,
+    mut asteroid_event: EventWriter<AsteroidDestroyedEvent>,
 ) {
     if let Ok((player, player_transform)) = player_query.get_single() {
-        for (asteroid, asteroid_transform) in asteroid_query.iter() {
+        for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size) in
+            asteroid_query.iter()
+        {
             // check for player asteroid collisions
             let player_collision = check_bb_collision(
                 Aabb2d::new(
@@ -439,7 +496,12 @@ fn collision_system(
 
                 if let Some(_) = projectile_collision {
                     commands.entity(projectile).insert(Despawning);
-                    commands.entity(asteroid).insert(Despawning);
+                    asteroid_event.send(AsteroidDestroyedEvent(
+                        asteroid,
+                        *asteroid_transform,
+                        *asteroid_velocity,
+                        *asteroid_size,
+                    ));
                 }
             }
         }
