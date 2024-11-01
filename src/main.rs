@@ -18,6 +18,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Stroids".to_string(),
                 resolution: (WINDOW_WIDTH, WINDOW_HEIGHT).into(),
+                present_mode: bevy::window::PresentMode::AutoVsync,
                 ..default()
             }),
             ..default()
@@ -28,8 +29,15 @@ fn main() {
         .add_systems(Update, (player_controls, projectile_spawner).chain())
         .add_systems(
             FixedUpdate,
-            (apply_movement, speed_limit_system, out_of_bounds_system).chain(),
+            (
+                apply_movement,
+                distance_tracker,
+                speed_limit_system,
+                out_of_bounds_system,
+            )
+                .chain(),
         )
+        .add_systems(FixedUpdate, projectile_despawner)
         .add_systems(FixedUpdate, apply_rotational_velocity)
         .run();
 }
@@ -94,11 +102,18 @@ impl PlayerBundle {
 #[derive(Component)]
 struct Projectile;
 
+#[derive(Component)]
+struct TravelDistance {
+    current: f32,
+    max: f32,
+}
+
 #[derive(Bundle)]
 struct ProjectileBundle {
     projectile: Projectile,
     heading: Heading,
     start_velocity: Velocity,
+    travel_distance: TravelDistance,
     sprite_bundle: SpriteBundle,
 }
 
@@ -127,6 +142,10 @@ impl ProjectileBundle {
                     ..default()
                 },
                 ..default()
+            },
+            travel_distance: TravelDistance {
+                current: 0.,
+                max: WINDOW_WIDTH,
             },
         }
     }
@@ -345,9 +364,23 @@ fn speed_limit_system(mut query: Query<&mut Velocity, With<Player>>) {
     }
 }
 
-fn projectile_spawner(mut command: Commands, mut ev_fire: EventReader<ProjectileFiredEvent>) {
+fn projectile_spawner(mut commands: Commands, mut ev_fire: EventReader<ProjectileFiredEvent>) {
     for ev in ev_fire.read() {
         let (heading, velocity, location) = (ev.0, ev.1, ev.2);
-        command.spawn(ProjectileBundle::new(heading.0, velocity.0, location));
+        commands.spawn(ProjectileBundle::new(heading.0, velocity.0, location));
+    }
+}
+
+fn distance_tracker(mut query: Query<(&mut TravelDistance, &Velocity)>, time: Res<Time>) {
+    for (mut travel_distance, velocity) in query.iter_mut() {
+        travel_distance.current += velocity.0.length() * time.delta_seconds()
+    }
+}
+
+fn projectile_despawner(mut commands: Commands, mut query: Query<(Entity, &mut TravelDistance)>) {
+    for (entity, travel_distance) in query.iter_mut() {
+        if travel_distance.current > travel_distance.max {
+            commands.entity(entity).despawn();
+        }
     }
 }
