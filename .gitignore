@@ -1,1 +1,12 @@
+*.db
+*.db-shm
+*.db-wal
+
+Cargo.lock
+
+**/*.rs.bk
+
+*.pdb
+
 /target
+/debug
