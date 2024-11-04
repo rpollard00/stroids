@@ -2,6 +2,7 @@ use crate::constants::*;
 use crate::physics::Heading;
 use crate::physics::Velocity;
 use crate::Despawning;
+use crate::GameAssets;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -9,9 +10,9 @@ const ACCELERATION_TIME: f32 = 1.0; // time to reach max acceleration
 const ROTATION_TIME: f32 = 0.75; // full rotation time
 const THRUST_POWER: f32 = MAX_SPEED / ACCELERATION_TIME;
 const ROTATION_SPEED: f32 = TAU / ROTATION_TIME;
-const SHIP_SIZE: Vec2 = Vec2::new(40., 20.);
+const SHIP_SIZE: Vec2 = Vec2::new(64., 32.);
 const PROJECTILE_BASE_VELOCITY: f32 = MAX_SPEED;
-const SHIP_COLOR: Color = Color::srgb(0.9, 0.0, 0.0);
+const SHIP_COLOR: Color = Color::srgb(1., 1., 1.);
 const PROJECTILE_COLOR: Color = Color::WHITE;
 
 #[derive(Component)]
@@ -47,7 +48,7 @@ struct ProjectileBundle {
 pub struct ProjectileFiredEvent(Heading, Velocity, Vec2);
 
 impl PlayerBundle {
-    pub fn new() -> PlayerBundle {
+    pub fn new(assets: Res<GameAssets>) -> PlayerBundle {
         PlayerBundle {
             player: Player,
             velocity: Velocity(Vec2::new(0., 0.)),
@@ -55,12 +56,11 @@ impl PlayerBundle {
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     color: SHIP_COLOR,
+                    custom_size: Some(SHIP_SIZE),
                     ..default()
                 },
-                transform: Transform {
-                    scale: SHIP_SIZE.extend(1.0),
-                    ..default()
-                },
+                transform: Transform { ..default() },
+                texture: assets.ship.clone(),
                 ..default()
             },
         }
@@ -97,13 +97,17 @@ impl ProjectileBundle {
     }
 }
 
+pub fn setup_player(mut commands: Commands, game_assets: Res<GameAssets>) {
+    commands.spawn(PlayerBundle::new(game_assets));
+}
+
 pub fn player_controls(
-    mut query: Query<(&mut Velocity, &mut Heading, &Transform), With<Player>>,
+    mut query: Query<(&mut Velocity, &mut Heading, &Transform, &Sprite), With<Player>>,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut ev_fire: EventWriter<ProjectileFiredEvent>,
 ) {
-    if let Ok((mut velocity, mut heading, transform)) = query.get_single_mut() {
+    if let Ok((mut velocity, mut heading, transform, sprite)) = query.get_single_mut() {
         if keys.pressed(KeyCode::KeyD) {
             heading.0 -= ROTATION_SPEED * time.delta_seconds();
         }
@@ -116,7 +120,8 @@ pub fn player_controls(
         let heading_vec = Vec2::new(heading.0.cos(), heading.0.sin());
 
         if keys.just_pressed(KeyCode::Space) {
-            let firing_start_pt = transform.scale.x * 0.5 + 5.;
+            let size = sprite.custom_size.unwrap();
+            let firing_start_pt = size.x * 0.5 + 5.;
             let ship_front = Vec2::new(
                 heading_vec.x * firing_start_pt,
                 heading_vec.y * firing_start_pt,

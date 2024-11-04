@@ -7,6 +7,7 @@ use crate::Projectile;
 use crate::asteroid::*;
 
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 use std::f32::consts::TAU;
 
 use bevy::math::bounding::{Aabb2d, IntersectsVolume};
@@ -69,24 +70,24 @@ pub fn out_of_bounds_system(mut query: Query<&mut Transform>) {
 
 pub fn collision_system(
     mut commands: Commands,
-    player_query: Query<(Entity, &Transform), With<Player>>,
+    player_query: Query<(Entity, &Transform, &Sprite), With<Player>>,
     projectile_query: Query<(Entity, &Transform), With<Projectile>>,
-    asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize), With<Asteroid>>,
+    asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize, &Sprite), With<Asteroid>>,
     mut asteroid_event: EventWriter<AsteroidDestroyedEvent>,
 ) {
-    if let Ok((player, player_transform)) = player_query.get_single() {
-        for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size) in
+    if let Ok((player, player_transform, player_sprite)) = player_query.get_single() {
+        for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size, asteroid_sprite) in
             asteroid_query.iter()
         {
             // check for player asteroid collisions
             let player_collision = check_bb_collision(
                 Aabb2d::new(
                     player_transform.translation.truncate(),
-                    player_transform.scale.truncate() / 2.,
+                    player_sprite.custom_size.unwrap() / 2.,
                 ),
                 Aabb2d::new(
                     asteroid_transform.translation.truncate(),
-                    asteroid_transform.scale.truncate() / 2.,
+                    asteroid_sprite.custom_size.unwrap() / 2.,
                 ),
             );
 
@@ -102,7 +103,7 @@ pub fn collision_system(
                     ),
                     Aabb2d::new(
                         asteroid_transform.translation.truncate(),
-                        asteroid_transform.scale.truncate() / 2.,
+                        asteroid_sprite.custom_size.unwrap() / 2.,
                     ),
                 );
 
@@ -128,4 +129,45 @@ fn check_bb_collision(collider: Aabb2d, collidee: Aabb2d) -> Option<Collision> {
     } else {
         Some(Collision)
     }
+}
+
+fn extract_visible_pixels(image_handle: &Handle<Image>, images: &Assets<Image>) -> Vec<Vec2> {
+    let mut visible_points = Vec::new();
+
+    if let Some(image) = images.get(image_handle) {
+        let pixel_data = &image.data;
+        let width = image.texture_descriptor.size.width as usize;
+        let height = image.texture_descriptor.size.height as usize;
+
+        if image.texture_descriptor.format == TextureFormat::Rgba8UnormSrgb {
+            // vec of u8, each pixel is made up of [RGBA], each value is a u8
+            // ex width is 4
+            //    height is 4
+            //  first pixel would be  (y(0) * image_width(4) + x(0) * 4(size of pixel data)) = 0
+            //  5th pixel would be y = 1 * 4 = 4 + 0 = 4 * 4 = 16
+            //  alpha of that is the last component from the calculated position so its index + 3
+            //
+            //          0    1    2    3 --> x
+            // so its 0 RGBA,RGBA,RGBA,RGBA
+            // so its 1 RGBA,RGBA,RGBA,RGBA
+            // so its 2 RGBA,RGBA,RGBA,RGBA
+            // so its 3 RGBA,RGBA,RGBA,RGBA
+            //        y
+            // row 1(second row) pixel 15(0 index)
+            // y = 1
+            // x = 15
+            for y in 0..height {
+                for x in 0..width {
+                    let pixel_index = (y * width + x) * 4;
+                    let pixel_alpha = pixel_data[pixel_index + 3];
+
+                    if pixel_alpha > 0 {
+                        visible_points.push(Vec2::new(x as f32, y as f32))
+                    }
+                }
+            }
+        }
+    }
+
+    visible_points
 }

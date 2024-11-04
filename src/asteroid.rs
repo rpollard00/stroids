@@ -4,6 +4,7 @@ use crate::physics::RotationalVelocity;
 use crate::physics::Velocity;
 use crate::screen_edge_distance;
 use crate::Despawning;
+use crate::GameAssets;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -16,6 +17,9 @@ const NUM_ASTEROIDS: i32 = 8;
 const MAX_ASTEROID_SPEED: f32 = MAX_SPEED / 8.;
 const MAX_ASTEROID_ROTATION_SPEED: f32 = TAU * 0.5;
 const SAFE_RADIUS: f32 = 200.;
+const LARGE_ASTEROID_SIZE: Vec2 = Vec2::new(128., 128.);
+const MEDIUM_ASTEROID_SIZE: Vec2 = Vec2::new(64., 64.);
+const SMALL_ASTEROID_SIZE: Vec2 = Vec2::new(32., 32.);
 
 #[derive(Event)]
 pub struct AsteroidDestroyedEvent(pub Entity, pub Transform, pub Velocity, pub AsteroidSize);
@@ -47,6 +51,7 @@ impl AsteroidBundle {
         velocity: Vec2,
         rotational_velocity: f32,
         heading: f32,
+        game_assets: &GameAssets,
     ) -> AsteroidBundle {
         AsteroidBundle {
             asteroid: Asteroid,
@@ -57,16 +62,21 @@ impl AsteroidBundle {
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     color: ASTEROID_COLOR,
+                    custom_size: match size {
+                        AsteroidSize::Small => Some(SMALL_ASTEROID_SIZE),
+                        AsteroidSize::Medium => Some(MEDIUM_ASTEROID_SIZE),
+                        AsteroidSize::Large => Some(LARGE_ASTEROID_SIZE),
+                    },
                     ..default()
+                },
+                texture: match size {
+                    AsteroidSize::Small => game_assets.asteroid_sm.clone(),
+                    AsteroidSize::Medium => game_assets.asteroid_m.clone(),
+                    AsteroidSize::Large => game_assets.asteroid_lg.clone(),
                 },
                 transform: Transform {
                     translation: position.extend(1.0),
                     rotation: Quat::from_rotation_z(heading),
-                    scale: match size {
-                        AsteroidSize::Small => Vec3::new(20., 20., 1.),
-                        AsteroidSize::Medium => Vec3::new(60., 60., 1.),
-                        AsteroidSize::Large => Vec3::new(100., 100., 1.),
-                    },
                     ..default()
                 },
                 ..default()
@@ -75,7 +85,11 @@ impl AsteroidBundle {
     }
 }
 
-pub fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyRand>>) {
+pub fn setup_asteroids(
+    mut commands: Commands,
+    mut rng: ResMut<GlobalEntropy<WyRand>>,
+    game_assets: Res<GameAssets>,
+) {
     for _ in 0..NUM_ASTEROIDS {
         // Random direction in radians
         let asteroid_direction = (rng.next_u32() as f32) % TAU;
@@ -105,6 +119,7 @@ pub fn setup_asteroids(mut commands: Commands, mut rng: ResMut<GlobalEntropy<WyR
             Vec2::new(x_velo, y_velo),
             random_rotational_velo,
             heading,
+            &game_assets,
         ));
     }
 }
@@ -113,6 +128,7 @@ pub fn asteroid_destroyed_listener(
     mut commands: Commands,
     mut asteroid_ev: EventReader<AsteroidDestroyedEvent>,
     mut rng: ResMut<GlobalEntropy<WyRand>>,
+    game_assets: Res<GameAssets>,
 ) {
     for ev in asteroid_ev.read() {
         let (entity, transform, velocity, size) = (ev.0, ev.1, ev.2, ev.3);
@@ -129,6 +145,7 @@ pub fn asteroid_destroyed_listener(
                     Vec2::new(velocity.0.y, velocity.0.x),
                     (rng.next_u32() as f32) % TAU,
                     0.0,
+                    &game_assets,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Small,
@@ -136,6 +153,7 @@ pub fn asteroid_destroyed_listener(
                     Vec2::new(-velocity.0.y, -velocity.0.x),
                     (rng.next_u32() as f32) % TAU,
                     0.0,
+                    &game_assets,
                 ));
             }
             AsteroidSize::Large => {
@@ -146,6 +164,7 @@ pub fn asteroid_destroyed_listener(
                     Vec2::new(velocity.0.y, velocity.0.x),
                     (rng.next_u32() as f32) % TAU,
                     0.0,
+                    &game_assets,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Medium,
@@ -153,6 +172,7 @@ pub fn asteroid_destroyed_listener(
                     Vec2::new(-velocity.0.y, -velocity.0.x),
                     (rng.next_u32() as f32) % TAU,
                     0.0,
+                    &game_assets,
                 ));
             }
         }
