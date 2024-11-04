@@ -3,6 +3,7 @@ use crate::physics::Heading;
 use crate::physics::Velocity;
 use crate::Despawning;
 use crate::GameAssets;
+use crate::GameState;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -27,6 +28,9 @@ pub struct PlayerBundle {
 }
 
 #[derive(Component)]
+pub struct Lives(pub u8);
+
+#[derive(Component)]
 pub struct Projectile;
 
 #[derive(Component)]
@@ -46,6 +50,9 @@ struct ProjectileBundle {
 
 #[derive(Event)]
 pub struct ProjectileFiredEvent(Heading, Velocity, Vec2);
+
+#[derive(Event)]
+pub struct PlayerKilledEvent;
 
 impl PlayerBundle {
     pub fn new(assets: Res<GameAssets>) -> PlayerBundle {
@@ -137,6 +144,31 @@ pub fn player_controls(
         if keys.pressed(KeyCode::KeyW) {
             let thrust = heading_vec * THRUST_POWER * time.delta_seconds();
             velocity.0 += thrust;
+        }
+    }
+}
+
+pub fn player_killed_listener(
+    mut event: EventReader<PlayerKilledEvent>,
+    mut query: Query<&mut Lives>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if event.is_empty() {
+        return;
+    }
+    // TODO Implement a lives counter, which would decrement lives, reset the asteroids, and move
+    // to ready. When we run out of lives then move to GameOver which would show a GameOver screen
+    // for now just move to GameOver
+    for _ev in event.read() {
+        let mut lives = query.single_mut();
+        lives.0 -= 1;
+
+        if lives.0 == 0 {
+            println!("Game over...");
+            next_state.set(GameState::GameOver)
+        } else {
+            println!("{} lives remaining", lives.0);
+            next_state.set(GameState::Loading)
         }
     }
 }

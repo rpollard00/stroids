@@ -2,6 +2,7 @@ use crate::constants::*;
 use crate::AsteroidDestroyedEvent;
 use crate::Despawning;
 use crate::Player;
+use crate::PlayerKilledEvent;
 use crate::Projectile;
 
 use crate::asteroid::*;
@@ -68,14 +69,25 @@ pub fn out_of_bounds_system(mut query: Query<&mut Transform>) {
     }
 }
 
+pub fn screen_edge_distance(direction_norm: &Vec2) -> f32 {
+    assert!(direction_norm.is_normalized());
+    let abs_dir = direction_norm.abs();
+
+    let x_edge_dist = MAX_X_POSITION / abs_dir.x;
+    let y_edge_dist = MAX_Y_POSITION / abs_dir.y;
+
+    x_edge_dist.min(y_edge_dist)
+}
+
 pub fn collision_system(
     mut commands: Commands,
-    player_query: Query<(Entity, &Transform, &Sprite), With<Player>>,
+    player_query: Query<(&Transform, &Sprite), With<Player>>,
     projectile_query: Query<(Entity, &Transform), With<Projectile>>,
     asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize, &Sprite), With<Asteroid>>,
     mut asteroid_event: EventWriter<AsteroidDestroyedEvent>,
+    mut player_killed_event: EventWriter<PlayerKilledEvent>,
 ) {
-    if let Ok((player, player_transform, player_sprite)) = player_query.get_single() {
+    if let Ok((player_transform, player_sprite)) = player_query.get_single() {
         for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size, asteroid_sprite) in
             asteroid_query.iter()
         {
@@ -92,7 +104,7 @@ pub fn collision_system(
             );
 
             if let Some(_) = player_collision {
-                commands.entity(player).insert(Despawning);
+                player_killed_event.send(PlayerKilledEvent);
             }
 
             for (projectile, projectile_transform) in projectile_query.iter() {
@@ -131,7 +143,7 @@ fn check_bb_collision(collider: Aabb2d, collidee: Aabb2d) -> Option<Collision> {
     }
 }
 
-fn extract_visible_pixels(image_handle: &Handle<Image>, images: &Assets<Image>) -> Vec<Vec2> {
+fn _extract_visible_pixels(image_handle: &Handle<Image>, images: &Assets<Image>) -> Vec<Vec2> {
     let mut visible_points = Vec::new();
 
     if let Some(image) = images.get(image_handle) {

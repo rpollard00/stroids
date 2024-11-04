@@ -1,4 +1,4 @@
-use bevy::{prelude::*, utils::warn};
+use bevy::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 
@@ -18,8 +18,9 @@ use asteroid::*;
 enum GameState {
     #[default]
     Loading,
-    Ready,
+    //    Ready,
     InGame,
+    GameOver,
 }
 
 fn main() {
@@ -37,22 +38,28 @@ fn main() {
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_event::<ProjectileFiredEvent>()
         .add_event::<AsteroidDestroyedEvent>()
-        // the player part of the setup, and setup_asteroids should be run when we enter the InGame
-        // state
+        .add_event::<PlayerKilledEvent>()
         .add_systems(Startup, (setup, load_assets).chain())
+        // Always run the despawner
+        .add_systems(Update, despawner)
+        //
+        // Loading State
+        //
         .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Loading)))
+        //
+        // InGame
+        //
+        // Spawn in game entities before entering the InGame state
         .add_systems(
             OnEnter(GameState::InGame),
             (setup_player, setup_asteroids).chain(),
-        ) //game/ asteroids
-        // player controls, projectile spawner should run in the InGame state
+        )
         .add_systems(
             Update,
             (player_controls, projectile_spawner)
                 .chain()
                 .run_if(in_state(GameState::InGame)),
-        ) // player
-        // all these systems should be in the InGame state, only
+        )
         .add_systems(
             FixedUpdate,
             (
@@ -63,11 +70,14 @@ fn main() {
                 out_of_bounds_system,        // physics
                 collision_system,            // physics
                 asteroid_destroyed_listener, // asteroids
-                despawner,                   // game
+                player_killed_listener,      // player
             )
                 .chain()
                 .run_if(in_state(GameState::InGame)),
         )
+        .add_systems(OnExit(GameState::InGame), cleanup_ingame)
+        // GameOver State
+        .add_systems(OnExit(GameState::GameOver), cleanup_gameover)
         .run();
 }
 
@@ -82,7 +92,7 @@ pub struct GameAssets {
     pub asteroid_sm: Handle<Image>,
 }
 
-fn draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) {
+fn _draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) {
     if let Ok(query) = query.get_single() {
         gizmos.line_2d(
             Vec2::ZERO,
@@ -117,6 +127,8 @@ fn setup(mut commands: Commands) {
         },
         ..default()
     });
+
+    commands.spawn(Lives(5));
 }
 
 fn move_to_ingame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<GameState>>) {
@@ -126,14 +138,26 @@ fn move_to_ingame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextSt
     }
 }
 
-fn screen_edge_distance(direction_norm: &Vec2) -> f32 {
-    assert!(direction_norm.is_normalized());
-    let abs_dir = direction_norm.abs();
+fn cleanup_ingame(
+    mut commands: Commands,
+    query: Query<Entity, Or<(With<Player>, With<Projectile>, With<Asteroid>)>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).try_insert(Despawning);
+    }
 
-    let x_edge_dist = MAX_X_POSITION / abs_dir.x;
-    let y_edge_dist = MAX_Y_POSITION / abs_dir.y;
+    next_state.set(GameState::Loading);
+}
 
-    x_edge_dist.min(y_edge_dist)
+fn cleanup_gameover(mut commands: Commands, mut query: Query<&mut Lives>) {
+    let maybe_lives = query.get_single_mut();
+
+    if let Ok(mut lives) = maybe_lives {
+        lives.0 = 5;
+    } else {
+        commands.spawn(Lives(5));
+    }
 }
 
 fn despawner(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
