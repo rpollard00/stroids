@@ -4,6 +4,7 @@ use crate::CollisionHulls;
 use crate::Despawning;
 use crate::GameAssets;
 use crate::GameState;
+use crate::Hull;
 use crate::Player;
 use crate::PlayerKilledEvent;
 use crate::Projectile;
@@ -170,13 +171,11 @@ pub fn collision_hull_builder(
     let asteroid_m_pixels = extract_visible_pixels(asteroid_m);
     let asteroid_lg_pixels = extract_visible_pixels(asteroid_lg);
 
-    // TODO switch this out for the hulls (this is raw pixel data), once the scanner is
-    // implemented, this is for visualization testing
     let hulls = CollisionHulls {
-        ship: ship_visible_pixels,
-        asteroid_sm: asteroid_sm_pixels,
-        asteroid_m: asteroid_m_pixels,
-        asteroid_lg: asteroid_lg_pixels,
+        ship: convex_hull(&ship_visible_pixels),
+        asteroid_sm: convex_hull(&asteroid_sm_pixels),
+        asteroid_m: convex_hull(&asteroid_m_pixels),
+        asteroid_lg: convex_hull(&asteroid_lg_pixels),
     };
 
     commands.insert_resource(hulls);
@@ -212,6 +211,8 @@ pub fn extract_visible_pixels(image: &Image) -> Vec<Vec2> {
                 let pixel_index = (y * width + x) * 4;
                 let pixel_alpha = pixel_data[pixel_index + 3];
 
+                // realign the pixels around the center of the image
+
                 if pixel_alpha > 0 {
                     visible_points.push(Vec2::new(x as f32, y as f32))
                 }
@@ -220,4 +221,71 @@ pub fn extract_visible_pixels(image: &Image) -> Vec<Vec2> {
     }
 
     visible_points
+}
+
+#[derive(Eq, PartialEq)]
+enum Orientation {
+    Collinear,
+    Clockwise,
+    CounterClockwise,
+}
+
+pub fn orientation(a: Vec2, b: Vec2, c: Vec2) -> Orientation {
+    let cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+    if cross == 0. {
+        Orientation::Collinear
+    } else if cross > 0. {
+        Orientation::CounterClockwise
+    } else {
+        Orientation::Clockwise
+    }
+}
+
+pub fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
+    // scan for the minimum, leftmost coord, i don't know if this is the best but for now we will
+    // consider 0,0 to be the smallest possible coord
+    //
+    let mut origin: Vec2 = Vec2::MAX;
+
+    // let origin_index: usize = 0;
+
+    // scan and find the minimum origin
+    for pt in pixel_data {
+        if pt.y < origin.y || (pt.y == origin.y && pt.x < origin.x) {
+            origin = *pt;
+        }
+    }
+
+    let mut sorted_pixel_data: Vec<Vec2> = pixel_data
+        .iter()
+        .filter(|pt| pt.x != origin.x && pt.y != origin.y)
+        .cloned()
+        .collect();
+
+    sorted_pixel_data.sort_by(|a, b| {
+        let angle_a = angle_from_vec(a.x - origin.x, a.y - origin.y);
+        let angle_b = angle_from_vec(b.x - origin.x, b.y - origin.y);
+
+        angle_a.partial_cmp(&angle_b).unwrap()
+    });
+
+    let mut hull: Vec<Vec2> = vec![origin];
+
+    for pt in sorted_pixel_data {
+        while hull.len() > 1
+            && orientation(hull[hull.len() - 2], hull[hull.len() - 1], pt) == Orientation::Clockwise
+        {
+            hull.pop();
+        }
+        hull.push(pt);
+    }
+
+    hull.push(*hull.first().clone().unwrap());
+
+    hull
+}
+
+fn angle_from_vec(x: f32, y: f32) -> f32 {
+    y.atan2(x)
 }

@@ -68,7 +68,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (player_controls, projectile_spawner)
+            (player_controls, projectile_spawner, draw_line_gizmo)
                 .chain()
                 .run_if(in_state(GameState::InGame)),
         )
@@ -117,7 +117,11 @@ pub struct GameAssets {
 #[derive(Resource)]
 struct AssetsLoading(Vec<UntypedHandle>);
 
-fn _draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) {
+fn draw_line_gizmo(
+    mut gizmos: Gizmos,
+    query: Query<&Transform, With<Player>>,
+    hulls: Res<CollisionHulls>,
+) {
     if let Ok(query) = query.get_single() {
         gizmos.line_2d(
             Vec2::ZERO,
@@ -125,6 +129,20 @@ fn _draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) 
             query.translation.truncate(),
             Color::srgb(0., 1., 1.),
         );
+    }
+
+    // draw_lines_from_pts(&mut gizmos, &hulls.ship);
+    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_lg, Color::srgb(1.0, 0.0, 0.0));
+    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_m, Color::srgb(0.0, 1.0, 0.0));
+    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_sm, Color::srgb(0.0, 0.0, 1.0));
+    draw_lines_from_pts(&mut gizmos, &hulls.ship, Color::srgb(1.0, 0.0, 1.0));
+}
+
+fn draw_lines_from_pts(gizmos: &mut Gizmos, pts: &Vec<Vec2>, color: Color) {
+    for line in pts.windows(2) {
+        let start = line[0];
+        let end = line[1];
+        gizmos.line_2d(start, end, color);
     }
 }
 
