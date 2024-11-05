@@ -168,7 +168,7 @@ pub fn player_killed_listener(
             next_state.set(GameState::GameOver)
         } else {
             println!("{} lives remaining", lives.0);
-            next_state.set(GameState::Loading)
+            next_state.set(GameState::Ready)
         }
     }
 }

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{asset::LoadState, prelude::*};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 
@@ -18,7 +18,8 @@ use asteroid::*;
 enum GameState {
     #[default]
     Loading,
-    //    Ready,
+    Processing,
+    Ready,
     InGame,
     GameOver,
 }
@@ -45,7 +46,18 @@ fn main() {
         //
         // Loading State
         //
-        .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Loading)))
+        .add_systems(
+            Update,
+            assets_loaded_listener.run_if(in_state(GameState::Loading)),
+        )
+        //
+        // Processing State
+        //
+        .add_systems(OnEnter(GameState::Processing), collision_hull_builder)
+        //
+        // Ready State
+        //
+        .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Ready)))
         //
         // InGame
         //
@@ -84,6 +96,16 @@ fn main() {
 #[derive(Component)]
 struct Despawning;
 
+type Hull = Vec<Vec2>;
+
+#[derive(Resource, Default, Clone)]
+pub struct CollisionHulls {
+    pub ship: Hull,
+    pub asteroid_lg: Hull,
+    pub asteroid_m: Hull,
+    pub asteroid_sm: Hull,
+}
+
 #[derive(Resource, Default, Clone)]
 pub struct GameAssets {
     pub ship: Handle<Image>,
@@ -91,6 +113,9 @@ pub struct GameAssets {
     pub asteroid_m: Handle<Image>,
     pub asteroid_sm: Handle<Image>,
 }
+
+#[derive(Resource)]
+struct AssetsLoading(Vec<UntypedHandle>);
 
 fn _draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) {
     if let Ok(query) = query.get_single() {
@@ -103,13 +128,23 @@ fn _draw_line_gizmo(mut gizmos: Gizmos, query: Query<&Transform, With<Player>>) 
     }
 }
 
-fn load_assets(mut commands: Commands, server: Res<AssetServer>) {
+fn load_assets(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    mut loading: ResMut<AssetsLoading>,
+) {
     let game_assets = GameAssets {
         ship: server.load("ship.png"),
         asteroid_lg: server.load("asteroid-lg.png"),
         asteroid_m: server.load("asteroid-m.png"),
         asteroid_sm: server.load("asteroid-sm.png"),
     };
+
+    loading.0.push(game_assets.ship.clone().untyped());
+    loading.0.push(game_assets.asteroid_lg.clone().untyped());
+    loading.0.push(game_assets.asteroid_m.clone().untyped());
+    loading.0.push(game_assets.asteroid_sm.clone().untyped());
+
     commands.insert_resource(game_assets);
 }
 
@@ -129,6 +164,7 @@ fn setup(mut commands: Commands) {
     });
 
     commands.spawn(Lives(5));
+    commands.insert_resource(AssetsLoading(Vec::new()));
 }
 
 fn move_to_ingame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<GameState>>) {
@@ -147,7 +183,7 @@ fn cleanup_ingame(
         commands.entity(entity).try_insert(Despawning);
     }
 
-    next_state.set(GameState::Loading);
+    next_state.set(GameState::Ready);
 }
 
 fn cleanup_gameover(mut commands: Commands, mut query: Query<&mut Lives>) {
@@ -163,5 +199,27 @@ fn cleanup_gameover(mut commands: Commands, mut query: Query<&mut Lives>) {
 fn despawner(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
+    }
+}
+
+fn assets_loaded_listener(
+    mut ev_asset: EventReader<AssetEvent<Image>>,
+    server: Res<AssetServer>,
+    handles: Res<AssetsLoading>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    for ev in ev_asset.read() {
+        let AssetEvent::LoadedWithDependencies { id: _ } = ev else {
+            continue;
+        };
+
+        let all_loaded = handles
+            .0
+            .iter()
+            .all(|h| server.load_state(h) == LoadState::Loaded);
+
+        if all_loaded {
+            next_state.set(GameState::Processing);
+        }
     }
 }

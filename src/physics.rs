@@ -1,6 +1,9 @@
 use crate::constants::*;
 use crate::AsteroidDestroyedEvent;
+use crate::CollisionHulls;
 use crate::Despawning;
+use crate::GameAssets;
+use crate::GameState;
 use crate::Player;
 use crate::PlayerKilledEvent;
 use crate::Projectile;
@@ -143,39 +146,74 @@ fn check_bb_collision(collider: Aabb2d, collidee: Aabb2d) -> Option<Collision> {
     }
 }
 
-fn _extract_visible_pixels(image_handle: &Handle<Image>, images: &Assets<Image>) -> Vec<Vec2> {
+// #[derive(Resource, Default, Clone)]
+// pub struct CollisionHulls {
+//     pub ship: Hull,
+//     pub asteroid_lg: Hull,
+//     pub asteroid_m: Hull,
+//     pub asteroid_sm: Hull,
+// }
+//
+pub fn collision_hull_builder(
+    mut commands: Commands,
+    assets: Res<Assets<Image>>,
+    handles: Res<GameAssets>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let ship = assets.get(&handles.ship).unwrap();
+    let asteroid_sm = assets.get(&handles.asteroid_sm).unwrap();
+    let asteroid_m = assets.get(&handles.asteroid_m).unwrap();
+    let asteroid_lg = assets.get(&handles.asteroid_lg).unwrap();
+
+    let ship_visible_pixels = extract_visible_pixels(ship);
+    let asteroid_sm_pixels = extract_visible_pixels(asteroid_sm);
+    let asteroid_m_pixels = extract_visible_pixels(asteroid_m);
+    let asteroid_lg_pixels = extract_visible_pixels(asteroid_lg);
+
+    // TODO switch this out for the hulls (this is raw pixel data), once the scanner is
+    // implemented, this is for visualization testing
+    let hulls = CollisionHulls {
+        ship: ship_visible_pixels,
+        asteroid_sm: asteroid_sm_pixels,
+        asteroid_m: asteroid_m_pixels,
+        asteroid_lg: asteroid_lg_pixels,
+    };
+
+    commands.insert_resource(hulls);
+    next_state.set(GameState::Ready);
+}
+
+pub fn extract_visible_pixels(image: &Image) -> Vec<Vec2> {
     let mut visible_points = Vec::new();
 
-    if let Some(image) = images.get(image_handle) {
-        let pixel_data = &image.data;
-        let width = image.texture_descriptor.size.width as usize;
-        let height = image.texture_descriptor.size.height as usize;
+    let pixel_data = &image.data;
+    let width = image.texture_descriptor.size.width as usize;
+    let height = image.texture_descriptor.size.height as usize;
 
-        if image.texture_descriptor.format == TextureFormat::Rgba8UnormSrgb {
-            // vec of u8, each pixel is made up of [RGBA], each value is a u8
-            // ex width is 4
-            //    height is 4
-            //  first pixel would be  (y(0) * image_width(4) + x(0) * 4(size of pixel data)) = 0
-            //  5th pixel would be y = 1 * 4 = 4 + 0 = 4 * 4 = 16
-            //  alpha of that is the last component from the calculated position so its index + 3
-            //
-            //          0    1    2    3 --> x
-            // so its 0 RGBA,RGBA,RGBA,RGBA
-            // so its 1 RGBA,RGBA,RGBA,RGBA
-            // so its 2 RGBA,RGBA,RGBA,RGBA
-            // so its 3 RGBA,RGBA,RGBA,RGBA
-            //        y
-            // row 1(second row) pixel 15(0 index)
-            // y = 1
-            // x = 15
-            for y in 0..height {
-                for x in 0..width {
-                    let pixel_index = (y * width + x) * 4;
-                    let pixel_alpha = pixel_data[pixel_index + 3];
+    if image.texture_descriptor.format == TextureFormat::Rgba8UnormSrgb {
+        // vec of u8, each pixel is made up of [RGBA], each value is a u8
+        // ex width is 4
+        //    height is 4
+        //  first pixel would be  (y(0) * image_width(4) + x(0) * 4(size of pixel data)) = 0
+        //  5th pixel would be y = 1 * 4 = 4 + 0 = 4 * 4 = 16
+        //  alpha of that is the last component from the calculated position so its index + 3
+        //
+        //          0    1    2    3 --> x
+        // so its 0 RGBA,RGBA,RGBA,RGBA
+        // so its 1 RGBA,RGBA,RGBA,RGBA
+        // so its 2 RGBA,RGBA,RGBA,RGBA
+        // so its 3 RGBA,RGBA,RGBA,RGBA
+        //        y
+        // row 1(second row) pixel 15(0 index)
+        // y = 1
+        // x = 15
+        for y in 0..height {
+            for x in 0..width {
+                let pixel_index = (y * width + x) * 4;
+                let pixel_alpha = pixel_data[pixel_index + 3];
 
-                    if pixel_alpha > 0 {
-                        visible_points.push(Vec2::new(x as f32, y as f32))
-                    }
+                if pixel_alpha > 0 {
+                    visible_points.push(Vec2::new(x as f32, y as f32))
                 }
             }
         }
