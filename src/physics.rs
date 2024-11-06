@@ -212,9 +212,11 @@ pub fn extract_visible_pixels(image: &Image) -> Vec<Vec2> {
                 let pixel_alpha = pixel_data[pixel_index + 3];
 
                 // realign the pixels around the center of the image
+                let x_f = (x as f32) - (width as f32) / 2.;
+                let y_f = (y as f32) - (height as f32) / 2.;
 
                 if pixel_alpha > 0 {
-                    visible_points.push(Vec2::new(x as f32, y as f32))
+                    visible_points.push(Vec2::new(x_f as f32, y_f as f32))
                 }
             }
         }
