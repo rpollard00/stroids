@@ -14,6 +14,9 @@ use player::*;
 mod asteroid;
 use asteroid::*;
 
+mod hull;
+use hull::*;
+
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 enum GameState {
     #[default]
@@ -53,7 +56,7 @@ fn main() {
         //
         // Processing State
         //
-        .add_systems(OnEnter(GameState::Processing), collision_hull_builder)
+        .add_systems(OnEnter(GameState::Processing), setup_collision_hulls)
         //
         // Ready State
         //
@@ -96,8 +99,6 @@ fn main() {
 #[derive(Component)]
 struct Despawning;
 
-type Hull = Vec<Vec2>;
-
 #[derive(Resource, Default, Clone)]
 pub struct CollisionHulls {
     pub ship: Hull,
@@ -132,18 +133,20 @@ fn draw_line_gizmo(
     }
 
     // draw_lines_from_pts(&mut gizmos, &hulls.ship);
-    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_lg, Color::srgb(1.0, 0.0, 0.0));
-    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_m, Color::srgb(0.0, 1.0, 0.0));
-    draw_lines_from_pts(&mut gizmos, &hulls.asteroid_sm, Color::srgb(0.0, 0.0, 1.0));
-    draw_lines_from_pts(&mut gizmos, &hulls.ship, Color::srgb(1.0, 0.0, 1.0));
-}
+    hulls
+        .asteroid_lg
+        .draw_as_lines(&mut gizmos, Color::srgb(1.0, 0.0, 0.0));
 
-fn draw_lines_from_pts(gizmos: &mut Gizmos, pts: &Vec<Vec2>, color: Color) {
-    for line in pts.windows(2) {
-        let start = line[0];
-        let end = line[1];
-        gizmos.line_2d(start, end, color);
-    }
+    hulls
+        .asteroid_m
+        .draw_as_lines(&mut gizmos, Color::srgb(0.0, 1.0, 0.0));
+
+    hulls
+        .asteroid_sm
+        .draw_as_lines(&mut gizmos, Color::srgb(0.0, 0.0, 1.0));
+    hulls
+        .ship
+        .draw_as_lines(&mut gizmos, Color::srgb(1.0, 0.0, 1.0));
 }
 
 fn load_assets(
@@ -164,6 +167,28 @@ fn load_assets(
     loading.0.push(game_assets.asteroid_sm.clone().untyped());
 
     commands.insert_resource(game_assets);
+}
+
+fn setup_collision_hulls(
+    mut commands: Commands,
+    assets: Res<Assets<Image>>,
+    handles: Res<GameAssets>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let ship = assets.get(&handles.ship).unwrap();
+    let asteroid_sm = assets.get(&handles.asteroid_sm).unwrap();
+    let asteroid_m = assets.get(&handles.asteroid_m).unwrap();
+    let asteroid_lg = assets.get(&handles.asteroid_lg).unwrap();
+
+    let hulls = CollisionHulls {
+        ship: Hull::new(ship),
+        asteroid_sm: Hull::new(&asteroid_sm),
+        asteroid_m: Hull::new(&asteroid_m),
+        asteroid_lg: Hull::new(&asteroid_lg),
+    };
+
+    commands.insert_resource(hulls);
+    next_state.set(GameState::Ready);
 }
 
 fn setup(mut commands: Commands) {
