@@ -5,6 +5,9 @@ pub struct Hull {
     path: Vec<Vec2>,
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct HullCollision;
+
 impl Hull {
     pub fn new(image: &Image) -> Hull {
         let image_vec = extract_visible_pixels(&image);
@@ -26,6 +29,93 @@ impl Hull {
             gizmos.line_2d(start, end, color);
         }
     }
+
+    pub fn from_bb(tr: Vec2, tl: Vec2, br: Vec2, bl: Vec2) -> Hull {
+        let mut path: Vec<Vec2> = Vec::new();
+
+        path.push(tr);
+        path.push(tl);
+        path.push(bl);
+        path.push(br);
+
+        Hull { path }
+    }
+}
+
+pub fn check_for_collision(
+    hull_a: &Hull,
+    hull_a_transform: &Transform,
+    hull_b: &Hull,
+    hull_b_transform: &Transform,
+) -> Option<HullCollision> {
+    let hull_a = hull_at_orientation(&hull_a, &hull_a_transform);
+    let hull_b = hull_at_orientation(&hull_b, &hull_b_transform);
+
+    let hull_a_axes = get_all_normals(&hull_a)
+        .into_iter()
+        .chain(get_all_normals(&hull_b));
+
+    for axis in hull_a_axes {
+        let proj_a = project(&hull_a, &axis);
+        let proj_b = project(&hull_b, &axis);
+
+        if !proj_a.overlaps(&proj_b) {
+            return None;
+        }
+    }
+
+    Some(HullCollision)
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Projection(f32, f32);
+impl Projection {
+    fn overlaps(&self, other: &Projection) -> bool {
+        self.0 <= other.1 && self.1 >= other.0
+    }
+}
+
+pub fn project(shape: &Vec<Vec2>, axis: &Vec2) -> Projection {
+    let mut max_p = f32::MIN;
+    let mut min_p = f32::MAX;
+
+    for v in shape.iter() {
+        let p = axis.dot(*v);
+
+        min_p = min_p.min(p);
+        max_p = max_p.max(p);
+    }
+
+    return Projection(min_p, max_p);
+}
+
+pub fn hull_at_orientation(hull: &Hull, transform: &Transform) -> Vec<Vec2> {
+    let Hull { path: raw_vertices } = hull;
+
+    // vertices need to be transformed by their rotation and position
+    let mut vertices = Vec::<Vec2>::new();
+    let translation = &transform.translation;
+    let rotation = &transform.rotation;
+
+    for v in raw_vertices {
+        let v_oriented = (*rotation * v.extend(0.0)) + *translation;
+        vertices.push(v_oriented.truncate());
+    }
+
+    vertices
+}
+
+pub fn normalized_normal(v1: Vec2, v2: Vec2) -> Vec2 {
+    let edge = v1 - v2;
+    edge.perp().normalize()
+}
+
+pub fn get_all_normals(pts: &Vec<Vec2>) -> Vec<Vec2> {
+    let mut normals = Vec::<Vec2>::new();
+    for edge in pts.windows(2) {
+        normals.push(normalized_normal(edge[0], edge[1]))
+    }
+    normals
 }
 
 #[derive(Eq, PartialEq)]

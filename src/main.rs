@@ -105,6 +105,7 @@ pub struct CollisionHulls {
     pub asteroid_lg: Hull,
     pub asteroid_m: Hull,
     pub asteroid_sm: Hull,
+    pub projectile: Hull,
 }
 
 #[derive(Resource, Default, Clone)]
@@ -202,6 +203,12 @@ fn setup_collision_hulls(
         asteroid_sm: Hull::new(&asteroid_sm),
         asteroid_m: Hull::new(&asteroid_m),
         asteroid_lg: Hull::new(&asteroid_lg),
+        projectile: Hull::from_bb(
+            Vec2::new(-2., 2.),
+            Vec2::new(2., 2.),
+            Vec2::new(2., -2.),
+            Vec2::new(-2., -2.),
+        ),
     };
 
     commands.insert_resource(hulls);

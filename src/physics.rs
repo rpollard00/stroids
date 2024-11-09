@@ -1,6 +1,8 @@
+use crate::check_for_collision;
 use crate::constants::*;
 use crate::AsteroidDestroyedEvent;
 use crate::Despawning;
+use crate::Hull;
 use crate::Player;
 use crate::PlayerKilledEvent;
 use crate::Projectile;
@@ -10,8 +12,6 @@ use crate::asteroid::*;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
-use bevy::math::bounding::{Aabb2d, IntersectsVolume};
-
 #[derive(Component, Clone, Copy)]
 pub struct Velocity(pub Vec2);
 
@@ -20,9 +20,6 @@ pub struct RotationalVelocity(pub f32);
 
 #[derive(Component, Clone, Copy)]
 pub struct Heading(pub f32);
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-struct Collision;
 
 pub fn apply_movement(mut query: Query<(&mut Transform, &Heading, &Velocity)>, time: Res<Time>) {
     for (mut transform, heading, velocity) in query.iter_mut() {
@@ -80,42 +77,34 @@ pub fn screen_edge_distance(direction_norm: &Vec2) -> f32 {
 
 pub fn collision_system(
     mut commands: Commands,
-    player_query: Query<(&Transform, &Sprite), With<Player>>,
-    projectile_query: Query<(Entity, &Transform), With<Projectile>>,
-    asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize, &Sprite), With<Asteroid>>,
+    player_query: Query<(&Transform, &Hull), With<Player>>,
+    projectile_query: Query<(Entity, &Transform, &Hull), With<Projectile>>,
+    asteroid_query: Query<(Entity, &Transform, &Velocity, &AsteroidSize, &Hull), With<Asteroid>>,
     mut asteroid_event: EventWriter<AsteroidDestroyedEvent>,
     mut player_killed_event: EventWriter<PlayerKilledEvent>,
 ) {
-    if let Ok((player_transform, player_sprite)) = player_query.get_single() {
-        for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size, asteroid_sprite) in
+    if let Ok((player_transform, player_hull)) = player_query.get_single() {
+        for (asteroid, asteroid_transform, asteroid_velocity, asteroid_size, asteroid_hull) in
             asteroid_query.iter()
         {
             // check for player asteroid collisions
-            let player_collision = check_bb_collision(
-                Aabb2d::new(
-                    player_transform.translation.truncate(),
-                    player_sprite.custom_size.unwrap() / 2.,
-                ),
-                Aabb2d::new(
-                    asteroid_transform.translation.truncate(),
-                    asteroid_sprite.custom_size.unwrap() / 2.,
-                ),
+            let player_collision = check_for_collision(
+                &player_hull,
+                &player_transform,
+                &asteroid_hull,
+                &asteroid_transform,
             );
 
             if let Some(_) = player_collision {
                 player_killed_event.send(PlayerKilledEvent);
             }
 
-            for (projectile, projectile_transform) in projectile_query.iter() {
-                let projectile_collision = check_bb_collision(
-                    Aabb2d::new(
-                        projectile_transform.translation.truncate(),
-                        projectile_transform.scale.truncate() / 2.,
-                    ),
-                    Aabb2d::new(
-                        asteroid_transform.translation.truncate(),
-                        asteroid_sprite.custom_size.unwrap() / 2.,
-                    ),
+            for (projectile, projectile_transform, projectile_hull) in projectile_query.iter() {
+                let projectile_collision = check_for_collision(
+                    &projectile_hull,
+                    &projectile_transform,
+                    &asteroid_hull,
+                    &asteroid_transform,
                 );
 
                 if let Some(_) = projectile_collision {
@@ -131,13 +120,5 @@ pub fn collision_system(
         }
     } else {
         return;
-    }
-}
-
-fn check_bb_collision(collider: Aabb2d, collidee: Aabb2d) -> Option<Collision> {
-    if !collider.intersects(&collidee) {
-        None
-    } else {
-        Some(Collision)
     }
 }

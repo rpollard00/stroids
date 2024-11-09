@@ -49,6 +49,7 @@ struct ProjectileBundle {
     start_velocity: Velocity,
     travel_distance: TravelDistance,
     sprite_bundle: SpriteBundle,
+    hull: Hull,
 }
 
 #[derive(Event)]
@@ -79,12 +80,18 @@ impl PlayerBundle {
 }
 
 impl ProjectileBundle {
-    pub fn new(heading: f32, start_velocity: Vec2, start: Vec2) -> ProjectileBundle {
+    pub fn new(
+        heading: f32,
+        start_velocity: Vec2,
+        start: Vec2,
+        collision_hulls: &CollisionHulls,
+    ) -> ProjectileBundle {
         let heading_vec = Vec2::new(heading.cos(), heading.sin());
         let velo = start_velocity + heading_vec * PROJECTILE_BASE_VELOCITY;
         ProjectileBundle {
             projectile: Projectile,
             heading: Heading(heading),
+            hull: collision_hulls.projectile.clone(),
             // ultimately heading doesn't really matter here, what we need is a velocity vector in
             // the right direction based on the ship's heading
             start_velocity: Velocity(velo),
@@ -190,10 +197,19 @@ pub fn speed_limit_system(mut query: Query<&mut Velocity, With<Player>>) {
     }
 }
 
-pub fn projectile_spawner(mut commands: Commands, mut ev_fire: EventReader<ProjectileFiredEvent>) {
+pub fn projectile_spawner(
+    mut commands: Commands,
+    mut ev_fire: EventReader<ProjectileFiredEvent>,
+    collision_hulls: Res<CollisionHulls>,
+) {
     for ev in ev_fire.read() {
         let (heading, velocity, location) = (ev.0, ev.1, ev.2);
-        commands.spawn(ProjectileBundle::new(heading.0, velocity.0, location));
+        commands.spawn(ProjectileBundle::new(
+            heading.0,
+            velocity.0,
+            location,
+            &collision_hulls,
+        ));
     }
 }
 
