@@ -3,8 +3,10 @@ use crate::physics::Heading;
 use crate::physics::RotationalVelocity;
 use crate::physics::Velocity;
 use crate::screen_edge_distance;
+use crate::CollisionHulls;
 use crate::Despawning;
 use crate::GameAssets;
+use crate::Hull;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -42,6 +44,7 @@ struct AsteroidBundle {
     rotational_velocity: RotationalVelocity,
     heading: Heading,
     sprite_bundle: SpriteBundle,
+    hull: Hull,
 }
 
 impl AsteroidBundle {
@@ -52,6 +55,7 @@ impl AsteroidBundle {
         rotational_velocity: f32,
         heading: f32,
         game_assets: &GameAssets,
+        collision_hulls: &CollisionHulls,
     ) -> AsteroidBundle {
         AsteroidBundle {
             asteroid: Asteroid,
@@ -59,6 +63,11 @@ impl AsteroidBundle {
             velocity: Velocity(velocity),
             rotational_velocity: RotationalVelocity(rotational_velocity),
             heading: Heading(heading),
+            hull: match size {
+                AsteroidSize::Small => collision_hulls.asteroid_sm.clone(),
+                AsteroidSize::Medium => collision_hulls.asteroid_m.clone(),
+                AsteroidSize::Large => collision_hulls.asteroid_lg.clone(),
+            },
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     color: ASTEROID_COLOR,
@@ -89,6 +98,7 @@ pub fn setup_asteroids(
     mut commands: Commands,
     mut rng: ResMut<GlobalEntropy<WyRand>>,
     game_assets: Res<GameAssets>,
+    collision_hulls: Res<CollisionHulls>,
 ) {
     for _ in 0..NUM_ASTEROIDS {
         // Random direction in radians
@@ -120,6 +130,7 @@ pub fn setup_asteroids(
             random_rotational_velo,
             heading,
             &game_assets,
+            &collision_hulls,
         ));
     }
 }
@@ -129,6 +140,7 @@ pub fn asteroid_destroyed_listener(
     mut asteroid_ev: EventReader<AsteroidDestroyedEvent>,
     mut rng: ResMut<GlobalEntropy<WyRand>>,
     game_assets: Res<GameAssets>,
+    collision_hulls: Res<CollisionHulls>,
 ) {
     for ev in asteroid_ev.read() {
         let (entity, transform, velocity, size) = (ev.0, ev.1, ev.2, ev.3);
@@ -146,6 +158,7 @@ pub fn asteroid_destroyed_listener(
                     (rng.next_u32() as f32) % TAU,
                     0.0,
                     &game_assets,
+                    &collision_hulls,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Small,
@@ -154,6 +167,7 @@ pub fn asteroid_destroyed_listener(
                     (rng.next_u32() as f32) % TAU,
                     0.0,
                     &game_assets,
+                    &collision_hulls,
                 ));
             }
             AsteroidSize::Large => {
@@ -165,6 +179,7 @@ pub fn asteroid_destroyed_listener(
                     (rng.next_u32() as f32) % TAU,
                     0.0,
                     &game_assets,
+                    &collision_hulls,
                 ));
                 commands.spawn(AsteroidBundle::new(
                     AsteroidSize::Medium,
@@ -173,6 +188,7 @@ pub fn asteroid_destroyed_listener(
                     (rng.next_u32() as f32) % TAU,
                     0.0,
                     &game_assets,
+                    &collision_hulls,
                 ));
             }
         }

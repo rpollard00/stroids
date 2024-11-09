@@ -1,7 +1,6 @@
 use crate::constants::*;
 use crate::AsteroidDestroyedEvent;
 use crate::Despawning;
-use crate::Hull;
 use crate::Player;
 use crate::PlayerKilledEvent;
 use crate::Projectile;
@@ -9,7 +8,6 @@ use crate::Projectile;
 use crate::asteroid::*;
 
 use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
 use std::f32::consts::TAU;
 
 use bevy::math::bounding::{Aabb2d, IntersectsVolume};

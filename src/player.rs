@@ -1,9 +1,11 @@
 use crate::constants::*;
 use crate::physics::Heading;
 use crate::physics::Velocity;
+use crate::CollisionHulls;
 use crate::Despawning;
 use crate::GameAssets;
 use crate::GameState;
+use crate::Hull;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -25,6 +27,7 @@ pub struct PlayerBundle {
     pub velocity: Velocity,
     pub heading: Heading,
     pub sprite_bundle: SpriteBundle,
+    pub hull: Hull,
 }
 
 #[derive(Component)]
@@ -55,11 +58,12 @@ pub struct ProjectileFiredEvent(Heading, Velocity, Vec2);
 pub struct PlayerKilledEvent;
 
 impl PlayerBundle {
-    pub fn new(assets: Res<GameAssets>) -> PlayerBundle {
+    pub fn new(assets: Res<GameAssets>, collision_hulls: Res<CollisionHulls>) -> PlayerBundle {
         PlayerBundle {
             player: Player,
             velocity: Velocity(Vec2::new(0., 0.)),
             heading: Heading(0.25 * TAU),
+            hull: collision_hulls.ship.clone(),
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     color: SHIP_COLOR,
@@ -104,8 +108,12 @@ impl ProjectileBundle {
     }
 }
 
-pub fn setup_player(mut commands: Commands, game_assets: Res<GameAssets>) {
-    commands.spawn(PlayerBundle::new(game_assets));
+pub fn setup_player(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    collision_hulls: Res<CollisionHulls>,
+) {
+    commands.spawn(PlayerBundle::new(game_assets, collision_hulls));
 }
 
 pub fn player_controls(

@@ -1,7 +1,6 @@
 use bevy::{prelude::*, render::render_resource::TextureFormat};
 
-// pub type Hull = Vec<Vec2>;
-#[derive(Clone, Default)]
+#[derive(Component, Clone, Default)]
 pub struct Hull {
     path: Vec<Vec2>,
 }
@@ -58,13 +57,13 @@ fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
         }
     }
 
-    let mut sorted_pixel_data: Vec<Vec2> = pixel_data
+    let mut sorted_pts: Vec<Vec2> = pixel_data
         .iter()
         .filter(|&&pt| pt != origin)
         .cloned()
         .collect();
 
-    sorted_pixel_data.sort_by(|a, b| {
+    sorted_pts.sort_by(|a, b| {
         let angle_a = angle_from_vec(a.x - origin.x, a.y - origin.y);
         let angle_b = angle_from_vec(b.x - origin.x, b.y - origin.y);
 
@@ -80,7 +79,7 @@ fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
 
     let mut hull: Vec<Vec2> = vec![origin];
 
-    for pt in sorted_pixel_data {
+    for pt in sorted_pts {
         while hull.len() > 1 {
             let last_pt = hull[hull.len() - 1];
             let second_last_pt = hull[hull.len() - 2];
