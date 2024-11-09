@@ -120,33 +120,50 @@ struct AssetsLoading(Vec<UntypedHandle>);
 
 fn draw_line_gizmo(
     mut gizmos: Gizmos,
-    query: Query<&Transform, With<Player>>,
+    player_query: Query<(&Transform, &Heading), With<Player>>,
+    asteroids_query: Query<(&Transform, &AsteroidSize), With<Asteroid>>,
     hulls: Res<CollisionHulls>,
 ) {
-    if let Ok(query) = query.get_single() {
-        gizmos.line_2d(
-            Vec2::ZERO,
-            // Vec2::new(MAX_X_POSITION, MAX_Y_POSITION),
-            query.translation.truncate(),
-            Color::srgb(0., 1., 1.),
-        );
+    let (player_transform, player_heading) = player_query.single();
+    gizmos.line_2d(
+        Vec2::ZERO,
+        // Vec2::new(MAX_X_POSITION, MAX_Y_POSITION),
+        player_transform.translation.truncate(),
+        Color::srgb(0., 1., 1.),
+    );
+
+    hulls.ship.draw_as_lines(
+        &mut gizmos,
+        Color::srgb(1.0, 0.0, 1.0),
+        &player_transform.translation.truncate(),
+        &player_transform.rotation,
+    );
+
+    for (transform, size) in asteroids_query.iter() {
+        // draw_lines_from_pts(&mut gizmos, &hulls.ship);
+        if *size == AsteroidSize::Small {
+            hulls.asteroid_sm.draw_as_lines(
+                &mut gizmos,
+                Color::srgb(0.0, 0.0, 1.0),
+                &transform.translation.truncate(),
+                &transform.rotation,
+            );
+        } else if *size == AsteroidSize::Medium {
+            hulls.asteroid_m.draw_as_lines(
+                &mut gizmos,
+                Color::srgb(0.0, 1.0, 0.0),
+                &transform.translation.truncate(),
+                &transform.rotation,
+            );
+        } else {
+            hulls.asteroid_lg.draw_as_lines(
+                &mut gizmos,
+                Color::srgb(1.0, 0.0, 0.0),
+                &transform.translation.truncate(),
+                &transform.rotation,
+            );
+        }
     }
-
-    // draw_lines_from_pts(&mut gizmos, &hulls.ship);
-    hulls
-        .asteroid_lg
-        .draw_as_lines(&mut gizmos, Color::srgb(1.0, 0.0, 0.0));
-
-    hulls
-        .asteroid_m
-        .draw_as_lines(&mut gizmos, Color::srgb(0.0, 1.0, 0.0));
-
-    hulls
-        .asteroid_sm
-        .draw_as_lines(&mut gizmos, Color::srgb(0.0, 0.0, 1.0));
-    hulls
-        .ship
-        .draw_as_lines(&mut gizmos, Color::srgb(1.0, 0.0, 1.0));
 }
 
 fn load_assets(

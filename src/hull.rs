@@ -2,7 +2,9 @@ use bevy::{prelude::*, render::render_resource::TextureFormat};
 
 // pub type Hull = Vec<Vec2>;
 #[derive(Clone, Default)]
-pub struct Hull(pub Vec<Vec2>);
+pub struct Hull {
+    path: Vec<Vec2>,
+}
 
 impl Hull {
     pub fn new(image: &Image) -> Hull {
@@ -11,11 +13,17 @@ impl Hull {
         convex_hull(&image_vec)
     }
 
-    pub fn draw_as_lines(self: &Self, gizmos: &mut Gizmos, color: Color) {
-        let Hull(pts) = self;
+    pub fn draw_as_lines(
+        self: &Self,
+        gizmos: &mut Gizmos,
+        color: Color,
+        position: &Vec2,
+        rotation: &Quat,
+    ) {
+        let Hull { path: pts } = self;
         for line in pts.windows(2) {
-            let start = line[0];
-            let end = line[1];
+            let start = (*rotation * line[0].extend(0.0)).truncate() + *position;
+            let end = (*rotation * line[1].extend(0.0)).truncate() + *position;
             gizmos.line_2d(start, end, color);
         }
     }
@@ -81,7 +89,7 @@ fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
 
     hull.push(*hull.first().clone().unwrap());
 
-    Hull(hull)
+    Hull { path: hull }
 }
 
 fn angle_from_vec(x: f32, y: f32) -> f32 {

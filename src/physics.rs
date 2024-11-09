@@ -1,9 +1,6 @@
 use crate::constants::*;
 use crate::AsteroidDestroyedEvent;
-use crate::CollisionHulls;
 use crate::Despawning;
-use crate::GameAssets;
-use crate::GameState;
 use crate::Hull;
 use crate::Player;
 use crate::PlayerKilledEvent;
