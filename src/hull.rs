@@ -49,12 +49,7 @@ fn orientation(a: Vec2, b: Vec2, c: Vec2) -> Orientation {
 }
 
 fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
-    // scan for the minimum, leftmost coord, i don't know if this is the best but for now we will
-    // consider 0,0 to be the smallest possible coord
-    //
     let mut origin: Vec2 = Vec2::MAX;
-
-    // let origin_index: usize = 0;
 
     // scan and find the minimum origin
     for pt in pixel_data {
@@ -65,7 +60,7 @@ fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
 
     let mut sorted_pixel_data: Vec<Vec2> = pixel_data
         .iter()
-        .filter(|pt| pt.x != origin.x && pt.y != origin.y)
+        .filter(|&&pt| pt != origin)
         .cloned()
         .collect();
 
@@ -73,16 +68,38 @@ fn convex_hull(pixel_data: &Vec<Vec2>) -> Hull {
         let angle_a = angle_from_vec(a.x - origin.x, a.y - origin.y);
         let angle_b = angle_from_vec(b.x - origin.x, b.y - origin.y);
 
-        angle_a.partial_cmp(&angle_b).unwrap()
+        if angle_a == angle_b {
+            let dist_a = (*a - origin).length_squared();
+            let dist_b = (*b - origin).length_squared();
+
+            dist_a.partial_cmp(&dist_b).unwrap()
+        } else {
+            angle_a.partial_cmp(&angle_b).unwrap()
+        }
     });
 
     let mut hull: Vec<Vec2> = vec![origin];
 
     for pt in sorted_pixel_data {
-        while hull.len() > 1
-            && orientation(hull[hull.len() - 2], hull[hull.len() - 1], pt) == Orientation::Clockwise
-        {
-            hull.pop();
+        while hull.len() > 1 {
+            let last_pt = hull[hull.len() - 1];
+            let second_last_pt = hull[hull.len() - 2];
+
+            match orientation(second_last_pt, last_pt, pt) {
+                Orientation::CounterClockwise => break,
+                Orientation::Clockwise => {
+                    hull.pop();
+                }
+                Orientation::Collinear => {
+                    if (pt - second_last_pt).length_squared()
+                        > (last_pt - second_last_pt).length_squared()
+                    {
+                        hull.pop();
+                    } else {
+                        break;
+                    }
+                }
+            };
         }
         hull.push(pt);
     }
@@ -129,8 +146,11 @@ fn extract_visible_pixels(image: &Image) -> Vec<Vec2> {
                 let x_f = (x as f32) - (width as f32) / 2.;
                 let y_f = (y as f32) - (height as f32) / 2.;
 
+                // appears y coord needs a flip for some reason
+                // for some reason these are constructed differently from the textures so they were
+                // not matching
                 if pixel_alpha > 0 {
-                    visible_points.push(Vec2::new(x_f as f32, y_f as f32))
+                    visible_points.push(Vec2::new(x_f as f32, -y_f as f32))
                 }
             }
         }

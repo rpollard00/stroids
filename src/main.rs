@@ -120,11 +120,11 @@ struct AssetsLoading(Vec<UntypedHandle>);
 
 fn draw_line_gizmo(
     mut gizmos: Gizmos,
-    player_query: Query<(&Transform, &Heading), With<Player>>,
+    player_query: Query<&Transform, With<Player>>,
     asteroids_query: Query<(&Transform, &AsteroidSize), With<Asteroid>>,
     hulls: Res<CollisionHulls>,
 ) {
-    let (player_transform, player_heading) = player_query.single();
+    let player_transform = player_query.single();
     gizmos.line_2d(
         Vec2::ZERO,
         // Vec2::new(MAX_X_POSITION, MAX_Y_POSITION),
