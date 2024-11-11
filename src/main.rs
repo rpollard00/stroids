@@ -17,12 +17,16 @@ use asteroid::*;
 mod hull;
 use hull::*;
 
+mod ui;
+use ui::*;
+
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 enum GameState {
     #[default]
     Loading,
     Processing,
-    Ready,
+    NewGame,
+    Died,
     InGame,
     GameOver,
 }
@@ -60,7 +64,15 @@ fn main() {
         //
         // Ready State
         //
-        .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Ready)))
+        .add_systems(OnEnter(GameState::NewGame), setup_title_screen)
+        .add_systems(Update, move_to_ingame.run_if(in_state(GameState::NewGame)))
+        .add_systems(OnExit(GameState::NewGame), despawn_title_screen)
+        //
+        // Died State - player is dead but not gameover
+        //
+        .add_systems(OnEnter(GameState::Died), setup_died_screen)
+        .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Died)))
+        .add_systems(OnExit(GameState::Died), despawn_died_screen)
         //
         // InGame
         //
@@ -71,7 +83,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (player_controls, projectile_spawner, draw_line_gizmo)
+            (player_controls, projectile_spawner)
                 .chain()
                 .run_if(in_state(GameState::InGame)),
         )
@@ -114,6 +126,7 @@ pub struct GameAssets {
     pub asteroid_lg: Handle<Image>,
     pub asteroid_m: Handle<Image>,
     pub asteroid_sm: Handle<Image>,
+    pub font: Handle<Font>,
 }
 
 #[derive(Resource)]
@@ -177,12 +190,14 @@ fn load_assets(
         asteroid_lg: server.load("asteroid-lg.png"),
         asteroid_m: server.load("asteroid-m.png"),
         asteroid_sm: server.load("asteroid-sm.png"),
+        font: server.load("LeagueMono-Thin.ttf"),
     };
 
     loading.0.push(game_assets.ship.clone().untyped());
     loading.0.push(game_assets.asteroid_lg.clone().untyped());
     loading.0.push(game_assets.asteroid_m.clone().untyped());
     loading.0.push(game_assets.asteroid_sm.clone().untyped());
+    loading.0.push(game_assets.font.clone().untyped());
 
     commands.insert_resource(game_assets);
 }
@@ -212,7 +227,7 @@ fn setup_collision_hulls(
     };
 
     commands.insert_resource(hulls);
-    next_state.set(GameState::Ready);
+    next_state.set(GameState::NewGame);
 }
 
 fn setup(mut commands: Commands) {
@@ -244,13 +259,19 @@ fn move_to_ingame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextSt
 fn cleanup_ingame(
     mut commands: Commands,
     query: Query<Entity, Or<(With<Player>, With<Projectile>, With<Asteroid>)>>,
+    lives_query: Query<&Lives>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     for entity in query.iter() {
         commands.entity(entity).try_insert(Despawning);
     }
 
-    next_state.set(GameState::Ready);
+    let Lives(lives) = lives_query.single();
+    if *lives == 0 {
+        next_state.set(GameState::NewGame);
+    } else {
+        next_state.set(GameState::Died);
+    }
 }
 
 fn cleanup_gameover(mut commands: Commands, mut query: Query<&mut Lives>) {

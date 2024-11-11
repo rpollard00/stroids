@@ -8,6 +8,14 @@ pub struct Hull {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct HullCollision;
 
+#[derive(Clone, Copy, Debug)]
+struct Projection(f32, f32);
+impl Projection {
+    fn overlaps(&self, other: &Projection) -> bool {
+        self.0 <= other.1 && self.1 >= other.0
+    }
+}
+
 impl Hull {
     pub fn new(image: &Image) -> Hull {
         let image_vec = extract_visible_pixels(&image);
@@ -65,14 +73,6 @@ pub fn check_for_collision(
     }
 
     Some(HullCollision)
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Projection(f32, f32);
-impl Projection {
-    fn overlaps(&self, other: &Projection) -> bool {
-        self.0 <= other.1 && self.1 >= other.0
-    }
 }
 
 pub fn project(shape: &Vec<Vec2>, axis: &Vec2) -> Projection {
