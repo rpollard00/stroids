@@ -171,18 +171,13 @@ pub fn player_killed_listener(
     if event.is_empty() {
         return;
     }
-    // TODO Implement a lives counter, which would decrement lives, reset the asteroids, and move
-    // to ready. When we run out of lives then move to GameOver which would show a GameOver screen
-    // for now just move to GameOver
     for _ev in event.read() {
         let mut lives = query.single_mut();
         lives.0 -= 1;
 
         if lives.0 == 0 {
-            println!("Game over...");
             next_state.set(GameState::GameOver)
         } else {
-            println!("{} lives remaining", lives.0);
             next_state.set(GameState::Died)
         }
     }

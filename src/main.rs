@@ -103,8 +103,18 @@ fn main() {
                 .run_if(in_state(GameState::InGame)),
         )
         .add_systems(OnExit(GameState::InGame), cleanup_ingame)
+        //
         // GameOver State
-        .add_systems(OnExit(GameState::GameOver), cleanup_gameover)
+        //
+        .add_systems(OnEnter(GameState::GameOver), setup_gameover_screen)
+        .add_systems(
+            Update,
+            move_to_newgame.run_if(in_state(GameState::GameOver)),
+        )
+        .add_systems(
+            OnExit(GameState::GameOver),
+            (despawn_gameover_screen, cleanup_gameover).chain(),
+        )
         .run();
 }
 
@@ -250,27 +260,25 @@ fn setup(mut commands: Commands) {
 }
 
 fn move_to_ingame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::KeyP) {
+    if keys.just_pressed(KeyCode::KeyP) || keys.just_pressed(KeyCode::Enter) {
         println!("Pressed P");
         next_state.set(GameState::InGame);
+    }
+}
+
+fn move_to_newgame(keys: Res<ButtonInput<KeyCode>>, mut next_state: ResMut<NextState<GameState>>) {
+    if keys.just_pressed(KeyCode::KeyP) || keys.just_pressed(KeyCode::Enter) {
+        println!("Pressed P");
+        next_state.set(GameState::NewGame);
     }
 }
 
 fn cleanup_ingame(
     mut commands: Commands,
     query: Query<Entity, Or<(With<Player>, With<Projectile>, With<Asteroid>)>>,
-    lives_query: Query<&Lives>,
-    mut next_state: ResMut<NextState<GameState>>,
 ) {
     for entity in query.iter() {
         commands.entity(entity).try_insert(Despawning);
-    }
-
-    let Lives(lives) = lives_query.single();
-    if *lives == 0 {
-        next_state.set(GameState::NewGame);
-    } else {
-        next_state.set(GameState::Died);
     }
 }
 
