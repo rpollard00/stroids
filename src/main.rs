@@ -20,6 +20,9 @@ use hull::*;
 mod ui;
 use ui::*;
 
+mod scoring;
+use scoring::*;
+
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 enum GameState {
     #[default]
@@ -48,6 +51,7 @@ fn main() {
         .add_event::<AsteroidDestroyedEvent>()
         .add_event::<PlayerKilledEvent>()
         .add_systems(Startup, (setup, load_assets).chain())
+        .add_systems(Startup, setup_score)
         // Always run the despawner
         .add_systems(Update, despawner)
         //
@@ -64,7 +68,10 @@ fn main() {
         //
         // Ready State
         //
-        .add_systems(OnEnter(GameState::NewGame), setup_title_screen)
+        .add_systems(
+            OnEnter(GameState::NewGame),
+            (reset_score, setup_title_screen).chain(),
+        )
         .add_systems(Update, move_to_ingame.run_if(in_state(GameState::NewGame)))
         .add_systems(OnExit(GameState::NewGame), despawn_title_screen)
         //
@@ -83,21 +90,25 @@ fn main() {
         )
         .add_systems(
             Update,
-            (player_controls, projectile_spawner)
+            (
+                player_controls,
+                projectile_spawner,
+                asteroid_destroyed_listener,
+                player_killed_listener,
+                update_score_listener,
+            )
                 .chain()
                 .run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             FixedUpdate,
             (
-                apply_movement,              // physics
-                apply_rotational_velocity,   // physics
-                distance_tracker,            // asteroid
-                speed_limit_system,          // player
-                out_of_bounds_system,        // physics
-                collision_system,            // physics
-                asteroid_destroyed_listener, // asteroids
-                player_killed_listener,      // player
+                apply_movement,            // physics
+                apply_rotational_velocity, // physics
+                distance_tracker,          // asteroid
+                speed_limit_system,        // player
+                out_of_bounds_system,      // physics
+                collision_system,          // physics
             )
                 .chain()
                 .run_if(in_state(GameState::InGame)),

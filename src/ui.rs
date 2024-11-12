@@ -19,7 +19,7 @@ pub fn setup_title_screen(mut commands: Commands, assets: Res<GameAssets>) {
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section(
                 "Press [Enter] to Play",
-                h2_style(&font),
+                h3_style(&font),
             ));
         });
 }
@@ -67,11 +67,7 @@ pub fn despawn_died_screen(mut commands: Commands, query: Query<Entity, With<Die
 #[derive(Component)]
 pub struct GameOverScreen;
 
-pub fn setup_gameover_screen(
-    mut commands: Commands,
-    lives_query: Query<&Lives>,
-    assets: Res<GameAssets>,
-) {
+pub fn setup_gameover_screen(mut commands: Commands, assets: Res<GameAssets>) {
     let font = &assets.font;
     commands
         .spawn(NodeBundle {
