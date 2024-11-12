@@ -31,7 +31,5 @@ pub fn update_score_listener(
             crate::AsteroidSize::Medium => MEDIUM_ASTEROID_VALUE,
             crate::AsteroidSize::Large => LARGE_ASTEROID_VALUE,
         };
-
-        println!("Score: {}", score.0);
     }
 }

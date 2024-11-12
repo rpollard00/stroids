@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{GameAssets, Lives};
+use crate::{GameAssets, Lives, Score};
 
 #[derive(Component)]
 pub struct TitleScreen;
@@ -67,8 +67,9 @@ pub fn despawn_died_screen(mut commands: Commands, query: Query<Entity, With<Die
 #[derive(Component)]
 pub struct GameOverScreen;
 
-pub fn setup_gameover_screen(mut commands: Commands, assets: Res<GameAssets>) {
+pub fn setup_gameover_screen(mut commands: Commands, assets: Res<GameAssets>, score: Res<Score>) {
     let font = &assets.font;
+    let score_text = format!("Final Score: {}", score.0);
     commands
         .spawn(NodeBundle {
             style: ui_screen_style(),
@@ -77,6 +78,9 @@ pub fn setup_gameover_screen(mut commands: Commands, assets: Res<GameAssets>) {
         .insert(GameOverScreen)
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section("Game Over", h1_style(&font)));
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(score_text, h2_style(&font)));
         })
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section("Press [Enter]", h3_style(&font)));
@@ -89,6 +93,56 @@ pub fn despawn_gameover_screen(mut commands: Commands, query: Query<Entity, With
     }
 }
 
+#[derive(Component)]
+pub struct InGameUi;
+
+#[derive(Component)]
+pub struct ScoreText;
+
+pub fn setup_ingame_ui(
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    lives_query: Query<&Lives>,
+    score: Res<Score>,
+) {
+    let lives = lives_query.single();
+    let font = &assets.font;
+    let score_text = format!("Score: {}", score.0);
+    let lives_text = format!("Lives: {}", lives.0);
+
+    commands
+        .spawn(NodeBundle {
+            style: ingame_ui_style(),
+            ..default()
+        })
+        .insert(InGameUi)
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(lives_text, h3_style(&font)));
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section("|", h3_style(&font)));
+        })
+        .with_children(|parent| {
+            parent
+                .spawn(TextBundle::from_section(score_text, h3_style(&font)))
+                .insert(ScoreText);
+        });
+}
+
+pub fn despawn_ingame_ui(mut commands: Commands, query: Query<Entity, With<InGameUi>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+pub fn update_score_ui(score: Res<Score>, mut score_text_query: Query<&mut Text, With<ScoreText>>) {
+    if score.is_changed() {
+        if let Ok(mut text) = score_text_query.get_single_mut() {
+            text.sections[0].value = format!("Score: {}", score.0);
+        }
+    }
+}
+
 fn ui_screen_style() -> Style {
     Style {
         width: Val::Percent(100.0),
@@ -98,6 +152,19 @@ fn ui_screen_style() -> Style {
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
         row_gap: Val::Px(10.),
+        ..default()
+    }
+}
+
+fn ingame_ui_style() -> Style {
+    Style {
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        display: Display::Flex,
+        flex_direction: FlexDirection::Row,
+        justify_content: JustifyContent::Start,
+        align_items: AlignItems::Start,
+        column_gap: Val::Px(20.),
         ..default()
     }
 }

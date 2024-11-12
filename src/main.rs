@@ -86,7 +86,7 @@ fn main() {
         // Spawn in game entities before entering the InGame state
         .add_systems(
             OnEnter(GameState::InGame),
-            (setup_player, setup_asteroids).chain(),
+            (setup_player, setup_asteroids, setup_ingame_ui).chain(),
         )
         .add_systems(
             Update,
@@ -96,6 +96,7 @@ fn main() {
                 asteroid_destroyed_listener,
                 player_killed_listener,
                 update_score_listener,
+                update_score_ui,
             )
                 .chain()
                 .run_if(in_state(GameState::InGame)),
@@ -113,7 +114,10 @@ fn main() {
                 .chain()
                 .run_if(in_state(GameState::InGame)),
         )
-        .add_systems(OnExit(GameState::InGame), cleanup_ingame)
+        .add_systems(
+            OnExit(GameState::InGame),
+            (despawn_ingame_ui, cleanup_ingame).chain(),
+        )
         //
         // GameOver State
         //
