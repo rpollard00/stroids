@@ -23,6 +23,9 @@ use ui::*;
 mod scoring;
 use scoring::*;
 
+mod level;
+use level::*;
+
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 enum GameState {
     #[default]
@@ -32,6 +35,7 @@ enum GameState {
     Died,
     InGame,
     GameOver,
+    LevelComplete,
 }
 
 fn main() {
@@ -50,8 +54,9 @@ fn main() {
         .add_event::<ProjectileFiredEvent>()
         .add_event::<AsteroidDestroyedEvent>()
         .add_event::<PlayerKilledEvent>()
+        .add_event::<LevelUpEvent>()
         .add_systems(Startup, (setup, load_assets).chain())
-        .add_systems(Startup, setup_score)
+        .add_systems(Startup, (setup_score, setup_asteroid_count, setup_level))
         // Always run the despawner
         .add_systems(Update, despawner)
         //
@@ -81,6 +86,21 @@ fn main() {
         .add_systems(Update, move_to_ingame.run_if(in_state(GameState::Died)))
         .add_systems(OnExit(GameState::Died), despawn_died_screen)
         //
+        // Level Complete State - all asteroids destroyed
+        //
+        .add_systems(
+            OnEnter(GameState::LevelComplete),
+            setup_level_complete_screen,
+        )
+        .add_systems(
+            Update,
+            move_to_ingame.run_if(in_state(GameState::LevelComplete)),
+        )
+        .add_systems(
+            OnExit(GameState::LevelComplete),
+            despawn_level_complete_screen,
+        )
+        //
         // InGame
         //
         // Spawn in game entities before entering the InGame state
@@ -94,6 +114,7 @@ fn main() {
                 player_controls,
                 projectile_spawner,
                 asteroid_destroyed_listener,
+                level_completion_watcher,
                 player_killed_listener,
                 update_score_listener,
                 update_score_ui,

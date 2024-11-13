@@ -7,6 +7,7 @@ use crate::CollisionHulls;
 use crate::Despawning;
 use crate::GameAssets;
 use crate::Hull;
+use crate::Level;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -15,7 +16,7 @@ use bevy_rand::prelude::GlobalEntropy;
 use rand_core::RngCore;
 
 const ASTEROID_COLOR: Color = Color::WHITE;
-const NUM_ASTEROIDS: i32 = 8;
+const NUM_ASTEROIDS: u32 = 1;
 const MAX_ASTEROID_SPEED: f32 = MAX_SPEED / 8.;
 const MAX_ASTEROID_ROTATION_SPEED: f32 = TAU * 0.5;
 const SAFE_RADIUS: f32 = 200.;
@@ -35,6 +36,9 @@ pub enum AsteroidSize {
 
 #[derive(Component)]
 pub struct Asteroid;
+
+#[derive(Component)]
+pub struct AsteroidCount(pub u32);
 
 #[derive(Bundle)]
 struct AsteroidBundle {
@@ -93,14 +97,24 @@ impl AsteroidBundle {
         }
     }
 }
+pub fn setup_asteroid_count(mut commands: Commands) {
+    commands.spawn(AsteroidCount(0));
+}
 
 pub fn setup_asteroids(
     mut commands: Commands,
     mut rng: ResMut<GlobalEntropy<WyRand>>,
     game_assets: Res<GameAssets>,
     collision_hulls: Res<CollisionHulls>,
+    mut asteroid_count_query: Query<&mut AsteroidCount>,
+    level_query: Query<&Level>,
 ) {
-    for _ in 0..NUM_ASTEROIDS {
+    let level = level_query.single();
+    let mut asteroid_count = asteroid_count_query.single_mut();
+    let num_asteroids = NUM_ASTEROIDS + (2 * level.0);
+    asteroid_count.0 = num_asteroids;
+
+    for _ in 0..num_asteroids {
         // Random direction in radians
         let asteroid_direction = (rng.next_u32() as f32) % TAU;
         // Random direction as a unit vector
@@ -139,15 +153,18 @@ pub fn asteroid_destroyed_listener(
     mut commands: Commands,
     mut asteroid_ev: EventReader<AsteroidDestroyedEvent>,
     mut rng: ResMut<GlobalEntropy<WyRand>>,
+    mut asteroid_count_query: Query<&mut AsteroidCount>,
     game_assets: Res<GameAssets>,
     collision_hulls: Res<CollisionHulls>,
 ) {
     for ev in asteroid_ev.read() {
         let (entity, transform, velocity, size) = (ev.0, ev.1, ev.2, ev.3);
+        let mut asteroid_count = asteroid_count_query.single_mut();
 
         _ = match size {
             AsteroidSize::Small => {
                 commands.entity(entity).insert(Despawning);
+                asteroid_count.0 -= 1;
             }
             AsteroidSize::Medium => {
                 commands.entity(entity).insert(Despawning);
@@ -169,6 +186,7 @@ pub fn asteroid_destroyed_listener(
                     &game_assets,
                     &collision_hulls,
                 ));
+                asteroid_count.0 += 1;
             }
             AsteroidSize::Large => {
                 commands.entity(entity).insert(Despawning);
@@ -190,6 +208,7 @@ pub fn asteroid_destroyed_listener(
                     &game_assets,
                     &collision_hulls,
                 ));
+                asteroid_count.0 += 1;
             }
         }
     }

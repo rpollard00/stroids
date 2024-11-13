@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{GameAssets, Lives, Score};
+use crate::{GameAssets, Level, Lives, Score, LIFE_BONUS};
 
 #[derive(Component)]
 pub struct TitleScreen;
@@ -88,6 +88,54 @@ pub fn setup_gameover_screen(mut commands: Commands, assets: Res<GameAssets>, sc
 }
 
 pub fn despawn_gameover_screen(mut commands: Commands, query: Query<Entity, With<GameOverScreen>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+#[derive(Component)]
+pub struct LevelCompleteScreen;
+
+pub fn setup_level_complete_screen(
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    score: Res<Score>,
+    level_query: Query<&Level>,
+    lives_query: Query<&Lives>,
+) {
+    let next_level = level_query.single();
+    let lives = lives_query.single();
+    let next_level_text = format!("Next Level: {} ", next_level.0);
+    let font = &assets.font;
+    let score_text = format!(
+        "Score: {} (Lives Bonus: {})",
+        score.0,
+        lives.0 as u64 * (LIFE_BONUS * (next_level.0 - 1) as u64)
+    );
+    commands
+        .spawn(NodeBundle {
+            style: ui_screen_style(),
+            ..default()
+        })
+        .insert(LevelCompleteScreen)
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section("Level Complete", h1_style(&font)));
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(score_text, h2_style(&font)));
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(next_level_text, h2_style(&font)));
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section("Press [Enter]", h3_style(&font)));
+        });
+}
+
+pub fn despawn_level_complete_screen(
+    mut commands: Commands,
+    query: Query<Entity, With<LevelCompleteScreen>>,
+) {
     for entity in query.iter() {
         commands.entity(entity).despawn_recursive();
     }
