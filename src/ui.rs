@@ -151,12 +151,15 @@ pub fn setup_ingame_ui(
     mut commands: Commands,
     assets: Res<GameAssets>,
     lives_query: Query<&Lives>,
+    level_query: Query<&Level>,
     score: Res<Score>,
 ) {
     let lives = lives_query.single();
+    let level = level_query.single();
     let font = &assets.font;
     let score_text = format!("Score: {}", score.0);
     let lives_text = format!("Lives: {}", lives.0);
+    let level_text = format!("Level: {}", level.0);
 
     commands
         .spawn(NodeBundle {
@@ -174,6 +177,16 @@ pub fn setup_ingame_ui(
             parent
                 .spawn(TextBundle::from_section(score_text, h3_style(&font)))
                 .insert(ScoreText);
+        });
+
+    commands
+        .spawn(NodeBundle {
+            style: right_align_ui_style(),
+            ..default()
+        })
+        .insert(InGameUi)
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(level_text, h3_style(&font)));
         });
 }
 
@@ -211,6 +224,19 @@ fn ingame_ui_style() -> Style {
         display: Display::Flex,
         flex_direction: FlexDirection::Row,
         justify_content: JustifyContent::Start,
+        align_items: AlignItems::Start,
+        column_gap: Val::Px(20.),
+        ..default()
+    }
+}
+
+fn right_align_ui_style() -> Style {
+    Style {
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        display: Display::Flex,
+        flex_direction: FlexDirection::Row,
+        justify_content: JustifyContent::End,
         align_items: AlignItems::Start,
         column_gap: Val::Px(20.),
         ..default()
